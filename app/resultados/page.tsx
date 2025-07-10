@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, Heart, MessageSquare, TrendingUp, BarChart3, AlertCircle } from "lucide-react"
+import { CheckCircle, Heart, MessageSquare, BarChart3, AlertCircle } from "lucide-react"
 
 interface AnalyticsData {
   total_respuestas: number
@@ -53,7 +53,10 @@ export default function ResultadosPage() {
 
   // Función para convertir NPS (-100 a 100) a porcentaje (0 a 100) para la barra
   const getNPSPercentage = (nps: number) => {
-    return ((nps + 100) / 200) * 100
+    // Asegurar que el valor esté en el rango correcto
+    const clampedNPS = Math.max(-100, Math.min(100, nps))
+    // Convertir de rango -100,100 a rango 0,100
+    return ((clampedNPS + 100) / 200) * 100
   }
 
   // Función para obtener el color del NPS
@@ -110,7 +113,7 @@ export default function ResultadosPage() {
         </div>
 
         {/* Grilla Principal */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Tarjeta 1: NPS Global */}
           <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl">
             <CardHeader>
@@ -134,6 +137,11 @@ export default function ResultadosPage() {
                   <span>0</span>
                   <span>100</span>
                 </div>
+                {/* Agregar indicador visual del valor actual */}
+                <p className="text-xs text-gray-300 mt-2">
+                  Valor actual: {analytics.nps_global} (
+                  {analytics.nps_global >= 50 ? "Excelente" : analytics.nps_global >= 0 ? "Bueno" : "Necesita mejora"})
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -156,26 +164,6 @@ export default function ResultadosPage() {
                 ) : (
                   <p className="text-gray-400 text-center">No hay testimonios disponibles</p>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Tarjeta 3: Próxima Edición */}
-          <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center">
-                <TrendingUp className="w-5 h-5 mr-2 text-green-400" />🚀 Próxima Edición
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-orange-400 mb-3">¡Prepárate!</div>
-                <p className="text-gray-200 mb-4">
-                  La próxima edición de la Picanthón será aún mejor gracias a tu feedback.
-                </p>
-                <div className="bg-gradient-to-r from-orange-400 to-red-400 text-black px-4 py-2 rounded-full text-sm font-semibold">
-                  ¡Mantente atento!
-                </div>
               </div>
             </CardContent>
           </Card>
