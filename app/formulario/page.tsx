@@ -46,13 +46,22 @@ export default function FormularioPage() {
       })
 
       if (response.ok) {
+        // Éxito - redirigir a resultados
         router.push("/resultados")
       } else {
-        throw new Error("Failed to submit form")
+        // Error del servidor
+        const errorText = await response.text().catch(() => "Error desconocido")
+        console.error("Server error:", response.status, errorText)
+        alert("Error del servidor. Por favor, verifica tu conexión e inténtalo de nuevo.")
       }
     } catch (error) {
-      console.error("Error submitting form:", error)
-      alert("Hubo un error al enviar el formulario. Por favor, inténtalo de nuevo.")
+      // Error de red o conexión
+      console.error("Network error:", error)
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        alert("Error de conexión. Por favor, verifica tu conexión a internet e inténtalo de nuevo.")
+      } else {
+        alert("Hubo un error inesperado. Por favor, inténtalo de nuevo.")
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -222,9 +231,16 @@ export default function FormularioPage() {
               <Button
                 type="submit"
                 disabled={isSubmitting || !isFormValid()}
-                className="w-full bg-white text-black hover:bg-gray-200 font-semibold py-4 text-xl rounded-full transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-white text-black hover:bg-gray-200 font-semibold py-4 text-xl rounded-full transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                {isSubmitting ? "Enviando feedback..." : "Enviar Feedback"}
+                {isSubmitting ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black mr-2"></div>
+                    Enviando feedback...
+                  </div>
+                ) : (
+                  "Enviar Feedback"
+                )}
               </Button>
             </form>
           </CardContent>
