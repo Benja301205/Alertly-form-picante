@@ -4,43 +4,21 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, TrendingUp, Heart, Lightbulb, MessageSquare, BarChart3, AlertCircle } from "lucide-react"
-
-interface ExecutiveSummary {
-  key_message: string
-}
-
-interface KeyInsight {
-  insight: string
-}
-
-interface NegativePattern {
-  pattern: string
-  recommendation: string
-}
-
-interface PatternAnalysis {
-  negative_patterns: NegativePattern[]
-}
-
-interface AnalisisEjecutivo {
-  executive_summary: ExecutiveSummary
-  key_insights: KeyInsight[]
-  pattern_analysis: PatternAnalysis
-}
+import { CheckCircle, Heart, MessageSquare, TrendingUp, BarChart3, AlertCircle } from "lucide-react"
 
 interface AnalyticsData {
-  probabilidadVolver: number
-  calificacionLugar: number
-  calificacionComida: number
-  experienciaMentores: number
-  calificacionMiniGames: number
-  calificacionConsigna: number
-  dinamicaPitch: number
-  decisionJueces: number
-  nps_global: number
   total_respuestas: number
-  analisis_ejecutivo: AnalisisEjecutivo
+  nps_global: number
+  calificaciones_por_area: {
+    lugar: number
+    comida: number
+    mentores: number
+    games: number
+    consigna: number
+    pitch: number
+    jueces: number
+  }
+  testimonios_destacados: string[]
 }
 
 export default function ResultadosPage() {
@@ -72,6 +50,18 @@ export default function ResultadosPage() {
 
     fetchAnalytics()
   }, [])
+
+  // Función para convertir NPS (-100 a 100) a porcentaje (0 a 100) para la barra
+  const getNPSPercentage = (nps: number) => {
+    return ((nps + 100) / 200) * 100
+  }
+
+  // Función para obtener el color del NPS
+  const getNPSColor = (nps: number) => {
+    if (nps >= 50) return "from-green-400 to-emerald-500"
+    if (nps >= 0) return "from-yellow-400 to-orange-400"
+    return "from-red-400 to-red-500"
+  }
 
   if (loading) {
     return (
@@ -108,7 +98,7 @@ export default function ResultadosPage() {
   return (
     <div className="min-h-screen picante-gradient p-4">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
+        {/* Encabezado */}
         <div className="text-center mb-12 pt-8">
           <div className="flex justify-center mb-6">
             <CheckCircle className="w-16 h-16 text-green-400" />
@@ -119,44 +109,9 @@ export default function ResultadosPage() {
           </p>
         </div>
 
-        {/* Executive Summary */}
-        <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl mb-8">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center">
-              <MessageSquare className="w-5 h-5 mr-2 text-blue-400" />📋 Resumen Ejecutivo
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-200 text-lg leading-relaxed">
-              {analytics.analisis_ejecutivo.executive_summary.key_message}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Analytics Grid */}
+        {/* Grilla Principal */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {/* Key Insights */}
-          <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center">
-                <TrendingUp className="w-5 h-5 mr-2 text-orange-400" />🔥 Puntos Clave
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {analytics.analisis_ejecutivo.key_insights.map((insight, index) => (
-                  <div key={index} className="flex items-start">
-                    <span className="bg-orange-400 text-black rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3 mt-0.5">
-                      {index + 1}
-                    </span>
-                    <p className="text-gray-200">{insight.insight}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* NPS Global */}
+          {/* Tarjeta 1: NPS Global */}
           <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl">
             <CardHeader>
               <CardTitle className="text-white flex items-center">
@@ -166,39 +121,67 @@ export default function ResultadosPage() {
             </CardHeader>
             <CardContent>
               <div className="text-center">
-                <div className="text-4xl font-bold text-orange-400 mb-2">{analytics.nps_global}%</div>
-                <p className="text-gray-200">Net Promoter Score del evento</p>
-                <div className="w-full bg-gray-700 rounded-full h-3 mt-4">
+                <div className="text-4xl font-bold text-orange-400 mb-2">{analytics.nps_global}</div>
+                <p className="text-gray-200 mb-4">Net Promoter Score del evento</p>
+                <div className="w-full bg-gray-700 rounded-full h-3">
                   <div
-                    className="bg-gradient-to-r from-orange-400 to-red-400 h-3 rounded-full transition-all duration-1000"
-                    style={{ width: `${Math.max(0, Math.min(100, analytics.nps_global))}%` }}
+                    className={`bg-gradient-to-r ${getNPSColor(analytics.nps_global)} h-3 rounded-full transition-all duration-1000`}
+                    style={{ width: `${getNPSPercentage(analytics.nps_global)}%` }}
                   ></div>
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>-100</span>
+                  <span>0</span>
+                  <span>100</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Areas de Mejora */}
+          {/* Tarjeta 2: Testimonios Destacados */}
           <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl">
             <CardHeader>
               <CardTitle className="text-white flex items-center">
-                <Lightbulb className="w-5 h-5 mr-2 text-yellow-400" />💡 Áreas de Mejora
+                <MessageSquare className="w-5 h-5 mr-2 text-blue-400" />💬 Testimonios Destacados
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {analytics.analisis_ejecutivo.pattern_analysis.negative_patterns.map((pattern, index) => (
-                  <div key={index} className="flex items-start">
-                    <span className="text-yellow-400 mr-2">•</span>
-                    <p className="text-gray-200 text-sm">{pattern.recommendation}</p>
-                  </div>
-                ))}
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {analytics.testimonios_destacados.length > 0 ? (
+                  analytics.testimonios_destacados.map((testimonio, index) => (
+                    <blockquote key={index} className="border-l-4 border-orange-400 pl-3 py-2">
+                      <p className="text-gray-200 text-sm italic">"{testimonio}"</p>
+                    </blockquote>
+                  ))
+                ) : (
+                  <p className="text-gray-400 text-center">No hay testimonios disponibles</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tarjeta 3: Próxima Edición */}
+          <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center">
+                <TrendingUp className="w-5 h-5 mr-2 text-green-400" />🚀 Próxima Edición
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-400 mb-3">¡Prepárate!</div>
+                <p className="text-gray-200 mb-4">
+                  La próxima edición de la Picanthón será aún mejor gracias a tu feedback.
+                </p>
+                <div className="bg-gradient-to-r from-orange-400 to-red-400 text-black px-4 py-2 rounded-full text-sm font-semibold">
+                  ¡Mantente atento!
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Ratings Chart */}
+        {/* Sección de Gráfico de Barras */}
         <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl mb-8">
           <CardHeader>
             <CardTitle className="text-white flex items-center">
@@ -207,34 +190,43 @@ export default function ResultadosPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                { key: "calificacionLugar", label: "Lugar", value: analytics.calificacionLugar },
-                { key: "calificacionComida", label: "Comida", value: analytics.calificacionComida },
-                { key: "experienciaMentores", label: "Mentores", value: analytics.experienciaMentores },
-                { key: "calificacionMiniGames", label: "Mini Games", value: analytics.calificacionMiniGames },
-                { key: "calificacionConsigna", label: "Consigna", value: analytics.calificacionConsigna },
-                { key: "dinamicaPitch", label: "Dinámica Pitch", value: analytics.dinamicaPitch },
-                { key: "decisionJueces", label: "Decisión Jueces", value: analytics.decisionJueces },
-                { key: "probabilidadVolver", label: "Probabilidad de Volver", value: analytics.probabilidadVolver },
-              ].map(({ key, label, value }) => (
-                <div key={key} className="flex items-center justify-between">
-                  <span className="text-gray-200">{label}</span>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-32 bg-gray-700 rounded-full h-2">
-                      <div
-                        className="bg-gradient-to-r from-green-400 to-blue-400 h-2 rounded-full"
-                        style={{ width: `${(value / 5) * 100}%` }}
-                      ></div>
+              {Object.entries(analytics.calificaciones_por_area).map(([categoria, valor]) => {
+                // Mapear nombres de categorías a etiquetas más amigables
+                const etiquetas: { [key: string]: string } = {
+                  lugar: "Lugar",
+                  comida: "Comida",
+                  mentores: "Mentores",
+                  games: "Mini Games",
+                  consigna: "Consigna",
+                  pitch: "Dinámica Pitch",
+                  jueces: "Decisión Jueces",
+                }
+
+                return (
+                  <div key={categoria} className="flex items-center justify-between">
+                    <span className="text-gray-200 w-32">{etiquetas[categoria] || categoria}</span>
+                    <div className="flex items-center space-x-3 flex-1">
+                      <div className="w-full bg-gray-700 rounded-full h-3 mx-4">
+                        <div
+                          className="bg-gradient-to-r from-green-400 to-blue-400 h-3 rounded-full transition-all duration-1000"
+                          style={{ width: `${(valor / 5) * 100}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-orange-400 font-bold w-12 text-right">{valor.toFixed(2)}</span>
                     </div>
-                    <span className="text-orange-400 font-bold w-8">{value.toFixed(1)}</span>
                   </div>
-                </div>
-              ))}
+                )
+              })}
+            </div>
+            <div className="flex justify-between text-xs text-gray-400 mt-4">
+              <span>1.0 (Muy malo)</span>
+              <span>3.0 (Regular)</span>
+              <span>5.0 (Excelente)</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Actions */}
+        {/* Pie de Página */}
         <div className="text-center space-y-4">
           <Link href="/">
             <Button size="lg" className="bg-white text-black hover:bg-gray-200 font-semibold px-8 py-3 rounded-full">
