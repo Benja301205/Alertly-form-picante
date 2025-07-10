@@ -1,8 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle, Heart, MessageSquare, BarChart3, AlertCircle } from "lucide-react"
 
@@ -84,11 +82,6 @@ export default function ResultadosPage() {
           <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-4">Error al cargar las métricas</h1>
           <p className="text-gray-200 mb-6">{error}</p>
-          <Link href="/">
-            <Button size="lg" className="bg-white text-black hover:bg-gray-200 font-semibold px-8 py-3 rounded-full">
-              Volver al inicio
-            </Button>
-          </Link>
         </div>
       </div>
     )
@@ -108,7 +101,7 @@ export default function ResultadosPage() {
           </div>
           <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">¡Gracias por tu feedback!</h1>
           <p className="text-gray-200 text-xl mb-8">
-            Aquí están los insights de las  {analytics.total_respuestas} respuestas, procesados por Alertly
+            Aquí están los insights de las {analytics.total_respuestas} respuestas procesadas por Alertly
           </p>
         </div>
 
@@ -137,7 +130,6 @@ export default function ResultadosPage() {
                   <span>0</span>
                   <span>100</span>
                 </div>
-                {/* Agregar indicador visual del valor actual */}
                 <p className="text-xs text-gray-300 mt-2">
                   Valor actual: {analytics.nps_global} (
                   {analytics.nps_global >= 50 ? "Excelente" : analytics.nps_global >= 0 ? "Bueno" : "Necesita mejora"})
@@ -216,12 +208,7 @@ export default function ResultadosPage() {
 
         {/* Pie de Página */}
         <div className="text-center space-y-4">
-          <Link href="/">
-            <Button size="lg" className="bg-white text-black hover:bg-gray-200 font-semibold px-8 py-3 rounded-full">
-              Volver al inicio
-            </Button>
-          </Link>
-          <p className="text-gray-400">¿Quieres compartir más feedback? Puedes llenar el formulario nuevamente.</p>
+          <p className="text-gray-300 text-lg">¡Gracias por participar en la Picanthón!</p>
         </div>
 
         <div className="mt-12 text-center text-gray-400">
