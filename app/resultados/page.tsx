@@ -108,7 +108,7 @@ export default function ResultadosPage() {
           </div>
           <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">¡Gracias por tu feedback!</h1>
           <p className="text-gray-200 text-xl mb-8">
-            Aquí están los insights procesados por IA de las {analytics.total_respuestas} respuestas
+            Aquí están los insights de las  {analytics.total_respuestas} respuestas, procesados por Alertly
           </p>
         </div>
 
