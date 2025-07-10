@@ -131,8 +131,10 @@ export default function ResultadosPage() {
                   <span>100</span>
                 </div>
                 <p className="text-xs text-gray-300 mt-2">
-                  Valor actual: {analytics.nps_global} (
-                  {analytics.nps_global >= 50 ? "Excelente" : analytics.nps_global >= 0 ? "Bueno" : "Necesita mejora"})
+                  {`Valor actual: ${analytics.nps_global} (${
+                    analytics.nps_global >= 50 ? "Excelente" :
+                    analytics.nps_global >= 0 ? "Bueno" : "Necesita mejora"
+                  })`}
                 </p>
               </div>
             </CardContent>
