@@ -65,11 +65,20 @@ export default function FormularioPage() {
     }
 
     let retryCount = 0
-    const maxRetries = 3
+    const maxRetries = 2 // Reducido de 3 a 2
 
     while (retryCount < maxRetries) {
+      const controller = new AbortController()
+      let timeoutId: NodeJS.Timeout | null = null
+
       try {
         console.log(`Intento ${retryCount + 1} de envío:`, submissionData)
+
+        // Configurar timeout
+        timeoutId = setTimeout(() => {
+          console.log(`Timeout alcanzado en intento ${retryCount + 1}`)
+          controller.abort()
+        }, 15000) // Aumentado a 15 segundos
 
         const response = await fetch("https://augustus2425.app.n8n.cloud/webhook/picanthon-survey", {
           method: "POST",
@@ -78,12 +87,18 @@ export default function FormularioPage() {
             Accept: "application/json",
           },
           body: JSON.stringify(submissionData),
+          signal: controller.signal,
         })
+
+        // Limpiar timeout si la request es exitosa
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
 
         console.log(`Respuesta del servidor (intento ${retryCount + 1}):`, {
           status: response.status,
           statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
         })
 
         if (response.ok) {
@@ -91,7 +106,7 @@ export default function FormularioPage() {
           setSubmitSuccess(true)
           setTimeout(() => {
             router.push("/resultados")
-          }, 2000)
+          }, 1000)
           return
         } else {
           // Error del servidor
@@ -102,8 +117,8 @@ export default function FormularioPage() {
             body: errorText,
           })
 
-          if (response.status === 500 && errorText.includes("Workflow")) {
-            // Error específico del workflow de n8n
+          if (response.status >= 500) {
+            // Error del servidor - reintentar
             if (retryCount < maxRetries - 1) {
               retryCount++
               console.log(`Reintentando en 2 segundos... (intento ${retryCount + 1}/${maxRetries})`)
@@ -111,37 +126,53 @@ export default function FormularioPage() {
               continue
             } else {
               setSubmitError(
-                "El sistema de procesamiento está temporalmente no disponible. Tu feedback es importante, por favor inténtalo de nuevo en unos minutos.",
+                "El servidor está experimentando problemas. Tu feedback es importante, por favor inténtalo de nuevo en unos minutos.",
               )
             }
           } else if (response.status >= 400 && response.status < 500) {
-            // Error del cliente
+            // Error del cliente - no reintentar
             setSubmitError(
               "Hay un problema con los datos del formulario. Por favor, revisa que todos los campos estén completos e inténtalo de nuevo.",
             )
-          } else {
-            // Otros errores del servidor
-            setSubmitError("Error del servidor. Por favor, inténtalo de nuevo en unos minutos.")
           }
           break
         }
       } catch (error) {
-        console.error(`Error de red (intento ${retryCount + 1}):`, error)
-
-        if (retryCount < maxRetries - 1) {
-          retryCount++
-          console.log(`Reintentando en 2 segundos... (intento ${retryCount + 1}/${maxRetries})`)
-          await new Promise((resolve) => setTimeout(resolve, 2000))
-          continue
-        } else {
-          // Error de red después de todos los reintentos
-          if (error instanceof TypeError && error.message.includes("fetch")) {
-            setSubmitError("Error de conexión. Por favor, verifica tu conexión a internet e inténtalo de nuevo.")
-          } else {
-            setSubmitError("Hubo un error inesperado. Por favor, inténtalo de nuevo.")
-          }
-          break
+        // Limpiar timeout en caso de error
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
         }
+
+        console.error(`Error en intento ${retryCount + 1}:`, error)
+
+        if (error instanceof DOMException && error.name === "AbortError") {
+          console.log(`Request abortada en intento ${retryCount + 1}`)
+          if (retryCount < maxRetries - 1) {
+            retryCount++
+            console.log(`Reintentando por timeout... (intento ${retryCount + 1}/${maxRetries})`)
+            await new Promise((resolve) => setTimeout(resolve, 2000))
+            continue
+          } else {
+            setSubmitError(
+              "La conexión está tardando demasiado. Por favor, verifica tu conexión a internet e inténtalo de nuevo.",
+            )
+          }
+        } else if (error instanceof TypeError && error.message.includes("fetch")) {
+          // Error de red
+          if (retryCount < maxRetries - 1) {
+            retryCount++
+            console.log(`Reintentando por error de red... (intento ${retryCount + 1}/${maxRetries})`)
+            await new Promise((resolve) => setTimeout(resolve, 2000))
+            continue
+          } else {
+            setSubmitError("Error de conexión. Por favor, verifica tu conexión a internet e inténtalo de nuevo.")
+          }
+        } else {
+          // Otros errores
+          setSubmitError("Hubo un error inesperado. Por favor, inténtalo de nuevo.")
+        }
+        break
       }
     }
 
