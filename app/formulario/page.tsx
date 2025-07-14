@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,6 +32,19 @@ export default function FormularioPage() {
   const [connectionStatus, setConnectionStatus] = useState<"checking" | "online" | "offline">("online")
   const [submissionId, setSubmissionId] = useState<string | null>(null)
   const [hasSubmitted, setHasSubmitted] = useState(false)
+  const [recentSubmission, setRecentSubmission] = useState(false)
+
+  // Verificar si ya se envió recientemente (solo en el cliente)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const lastSubmissionTime = localStorage.getItem("lastSubmissionTime")
+      if (lastSubmissionTime) {
+        const timeDiff = Date.now() - Number.parseInt(lastSubmissionTime)
+        const fiveMinutes = 5 * 60 * 1000
+        setRecentSubmission(timeDiff < fiveMinutes)
+      }
+    }
+  }, [])
 
   // Función para verificar conectividad
   const checkConnectivity = async (): Promise<boolean> => {
@@ -157,9 +170,11 @@ export default function FormularioPage() {
         console.log(`🎉 Envío exitoso`)
         setSubmitSuccess(true)
 
-        // Guardar en localStorage para evitar reenvíos accidentales
-        localStorage.setItem("lastSubmissionId", uniqueSubmissionId)
-        localStorage.setItem("lastSubmissionTime", Date.now().toString())
+        // Guardar en localStorage para evitar reenvíos accidentales (solo en el cliente)
+        if (typeof window !== "undefined") {
+          localStorage.setItem("lastSubmissionId", uniqueSubmissionId)
+          localStorage.setItem("lastSubmissionTime", Date.now().toString())
+        }
 
         setTimeout(() => {
           router.push("/resultados")
@@ -218,17 +233,6 @@ export default function FormularioPage() {
     }
 
     setIsSubmitting(false)
-  }
-
-  // Verificar si ya se envió recientemente
-  const checkRecentSubmission = () => {
-    const lastSubmissionTime = localStorage.getItem("lastSubmissionTime")
-    if (lastSubmissionTime) {
-      const timeDiff = Date.now() - Number.parseInt(lastSubmissionTime)
-      const fiveMinutes = 5 * 60 * 1000
-      return timeDiff < fiveMinutes
-    }
-    return false
   }
 
   const handleRatingChange = (field: string, value: string) => {
@@ -354,7 +358,7 @@ export default function FormularioPage() {
         )}
 
         {/* Advertencia de envío reciente */}
-        {checkRecentSubmission() && (
+        {recentSubmission && (
           <div className="mb-8 p-4 bg-yellow-900/30 border border-yellow-600 rounded-lg">
             <p className="text-yellow-300 text-center">
               ⚠️ Parece que ya enviaste una encuesta recientemente. Si necesitas enviar otra, espera unos minutos.
@@ -461,11 +465,7 @@ export default function FormularioPage() {
               <Button
                 type="submit"
                 disabled={
-                  isSubmitting ||
-                  !isFormValid() ||
-                  submitSuccess ||
-                  connectionStatus === "offline" ||
-                  checkRecentSubmission()
+                  isSubmitting || !isFormValid() || submitSuccess || connectionStatus === "offline" || recentSubmission
                 }
                 className="w-full bg-white text-black hover:bg-gray-200 font-semibold py-4 text-xl rounded-full transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
@@ -484,7 +484,7 @@ export default function FormularioPage() {
                     <WifiOff className="w-5 h-5 mr-2" />
                     Sin conexión
                   </div>
-                ) : checkRecentSubmission() ? (
+                ) : recentSubmission ? (
                   "Envío reciente detectado"
                 ) : (
                   "Enviar Feedback"
