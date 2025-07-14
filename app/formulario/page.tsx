@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, AlertCircle, CheckCircle } from "lucide-react"
+import { ArrowLeft, AlertCircle, CheckCircle, Wifi, WifiOff } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 export default function FormularioPage() {
@@ -29,12 +29,43 @@ export default function FormularioPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<"checking" | "online" | "offline">("online")
+
+  // Función para verificar conectividad
+  const checkConnectivity = async (): Promise<boolean> => {
+    try {
+      setConnectionStatus("checking")
+      // Intentar hacer una request simple para verificar conectividad
+      const response = await fetch("https://httpbin.org/get", {
+        method: "GET",
+        mode: "cors",
+        signal: AbortSignal.timeout(5000),
+      })
+      const isOnline = response.ok
+      setConnectionStatus(isOnline ? "online" : "offline")
+      return isOnline
+    } catch (error) {
+      console.log("Connectivity check failed:", error)
+      setConnectionStatus("offline")
+      return false
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setSubmitError(null)
     setSubmitSuccess(false)
+
+    // Verificar conectividad primero
+    console.log("Verificando conectividad...")
+    const isConnected = await checkConnectivity()
+
+    if (!isConnected) {
+      setSubmitError("No se pudo establecer conexión a internet. Por favor, verifica tu conexión y vuelve a intentar.")
+      setIsSubmitting(false)
+      return
+    }
 
     // Preparar los datos en un formato más estructurado
     const submissionData = {
@@ -64,30 +95,43 @@ export default function FormularioPage() {
       },
     }
 
+    const webhookUrl = "https://augustus2425.app.n8n.cloud/webhook/picanthon-survey"
     let retryCount = 0
-    const maxRetries = 2 // Reducido de 3 a 2
+    const maxRetries = 3 // Aumentado a 3 intentos
 
     while (retryCount < maxRetries) {
-      const controller = new AbortController()
+      let controller: AbortController | null = null
       let timeoutId: NodeJS.Timeout | null = null
 
       try {
-        console.log(`Intento ${retryCount + 1} de envío:`, submissionData)
+        console.log(`🚀 Intento ${retryCount + 1} de ${maxRetries}`)
+        console.log(`📡 URL: ${webhookUrl}`)
+        console.log(`📊 Datos:`, submissionData)
 
-        // Configurar timeout
+        controller = new AbortController()
+
+        // Configurar timeout más largo
         timeoutId = setTimeout(() => {
-          console.log(`Timeout alcanzado en intento ${retryCount + 1}`)
-          controller.abort()
-        }, 15000) // Aumentado a 15 segundos
+          console.log(`⏰ Timeout alcanzado en intento ${retryCount + 1}`)
+          if (controller) {
+            controller.abort()
+          }
+        }, 20000) // 20 segundos
 
-        const response = await fetch("https://augustus2425.app.n8n.cloud/webhook/picanthon-survey", {
+        console.log(`⏳ Enviando request (timeout: 20s)...`)
+
+        const response = await fetch(webhookUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
+            // Agregar headers adicionales para CORS
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Content-Type",
           },
           body: JSON.stringify(submissionData),
           signal: controller.signal,
+          mode: "cors", // Especificar modo CORS explícitamente
         })
 
         // Limpiar timeout si la request es exitosa
@@ -96,22 +140,31 @@ export default function FormularioPage() {
           timeoutId = null
         }
 
-        console.log(`Respuesta del servidor (intento ${retryCount + 1}):`, {
+        console.log(`✅ Respuesta recibida (intento ${retryCount + 1}):`, {
           status: response.status,
           statusText: response.statusText,
+          ok: response.ok,
+          headers: Object.fromEntries(response.headers.entries()),
         })
 
         if (response.ok) {
           // Éxito
+          console.log(`🎉 Envío exitoso en intento ${retryCount + 1}`)
           setSubmitSuccess(true)
           setTimeout(() => {
             router.push("/resultados")
-          }, 1000)
+          }, 1500)
           return
         } else {
           // Error del servidor
-          const errorText = await response.text().catch(() => "Error desconocido")
-          console.error(`Error del servidor (intento ${retryCount + 1}):`, {
+          let errorText = "Error desconocido"
+          try {
+            errorText = await response.text()
+          } catch (e) {
+            console.log("No se pudo leer el texto del error:", e)
+          }
+
+          console.error(`❌ Error del servidor (intento ${retryCount + 1}):`, {
             status: response.status,
             statusText: response.statusText,
             body: errorText,
@@ -121,18 +174,18 @@ export default function FormularioPage() {
             // Error del servidor - reintentar
             if (retryCount < maxRetries - 1) {
               retryCount++
-              console.log(`Reintentando en 2 segundos... (intento ${retryCount + 1}/${maxRetries})`)
-              await new Promise((resolve) => setTimeout(resolve, 2000))
+              console.log(`🔄 Reintentando en 3 segundos... (intento ${retryCount + 1}/${maxRetries})`)
+              await new Promise((resolve) => setTimeout(resolve, 3000))
               continue
             } else {
               setSubmitError(
-                "El servidor está experimentando problemas. Tu feedback es importante, por favor inténtalo de nuevo en unos minutos.",
+                `Error del servidor (${response.status}). El sistema está experimentando problemas técnicos. Por favor, inténtalo de nuevo en unos minutos.`,
               )
             }
           } else if (response.status >= 400 && response.status < 500) {
             // Error del cliente - no reintentar
             setSubmitError(
-              "Hay un problema con los datos del formulario. Por favor, revisa que todos los campos estén completos e inténtalo de nuevo.",
+              `Error en la solicitud (${response.status}). Hay un problema con los datos enviados. Por favor, recarga la página e inténtalo de nuevo.`,
             )
           }
           break
@@ -144,33 +197,55 @@ export default function FormularioPage() {
           timeoutId = null
         }
 
-        console.error(`Error en intento ${retryCount + 1}:`, error)
+        console.error(`💥 Error en intento ${retryCount + 1}:`, {
+          name: error instanceof Error ? error.name : "Unknown",
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        })
 
         if (error instanceof DOMException && error.name === "AbortError") {
-          console.log(`Request abortada en intento ${retryCount + 1}`)
+          console.log(`⏰ Request cancelada por timeout en intento ${retryCount + 1}`)
           if (retryCount < maxRetries - 1) {
             retryCount++
-            console.log(`Reintentando por timeout... (intento ${retryCount + 1}/${maxRetries})`)
-            await new Promise((resolve) => setTimeout(resolve, 2000))
+            console.log(`🔄 Reintentando por timeout... (intento ${retryCount + 1}/${maxRetries})`)
+            await new Promise((resolve) => setTimeout(resolve, 3000))
             continue
           } else {
             setSubmitError(
-              "La conexión está tardando demasiado. Por favor, verifica tu conexión a internet e inténtalo de nuevo.",
+              "La conexión está tardando demasiado tiempo. Esto puede deberse a problemas de red o que el servidor esté ocupado. Por favor, inténtalo de nuevo.",
             )
           }
-        } else if (error instanceof TypeError && error.message.includes("fetch")) {
-          // Error de red
+        } else if (
+          error instanceof TypeError &&
+          (error.message.includes("fetch") || error.message.includes("Failed to fetch"))
+        ) {
+          // Error de red específico
+          console.log(`🌐 Error de red detectado en intento ${retryCount + 1}`)
+
           if (retryCount < maxRetries - 1) {
             retryCount++
-            console.log(`Reintentando por error de red... (intento ${retryCount + 1}/${maxRetries})`)
-            await new Promise((resolve) => setTimeout(resolve, 2000))
+            console.log(`🔄 Reintentando por error de red... (intento ${retryCount + 1}/${maxRetries})`)
+
+            // Verificar conectividad antes del siguiente intento
+            const stillConnected = await checkConnectivity()
+            if (!stillConnected) {
+              setSubmitError("Se perdió la conexión a internet. Por favor, verifica tu conexión y vuelve a intentar.")
+              break
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 3000))
             continue
           } else {
-            setSubmitError("Error de conexión. Por favor, verifica tu conexión a internet e inténtalo de nuevo.")
+            setSubmitError(
+              "Error de conexión persistente. Esto puede deberse a:\n• Problemas de conectividad a internet\n• El servidor no está disponible temporalmente\n• Restricciones de red o firewall\n\nPor favor, verifica tu conexión e inténtalo de nuevo.",
+            )
           }
         } else {
           // Otros errores
-          setSubmitError("Hubo un error inesperado. Por favor, inténtalo de nuevo.")
+          console.log(`🔥 Error desconocido en intento ${retryCount + 1}`)
+          setSubmitError(
+            `Error inesperado: ${error instanceof Error ? error.message : String(error)}. Por favor, recarga la página e inténtalo de nuevo.`,
+          )
         }
         break
       }
@@ -246,6 +321,28 @@ export default function FormularioPage() {
         <div className="text-center mb-12">
           <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">Formulario de Feedback</h1>
           <p className="text-gray-200 text-xl">Tu opinión nos ayuda a mejorar la experiencia para todos.</p>
+
+          {/* Indicador de conectividad */}
+          <div className="flex items-center justify-center mt-4">
+            {connectionStatus === "checking" && (
+              <div className="flex items-center text-yellow-400">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-400 mr-2"></div>
+                <span className="text-sm">Verificando conexión...</span>
+              </div>
+            )}
+            {connectionStatus === "online" && (
+              <div className="flex items-center text-green-400">
+                <Wifi className="w-4 h-4 mr-2" />
+                <span className="text-sm">Conectado</span>
+              </div>
+            )}
+            {connectionStatus === "offline" && (
+              <div className="flex items-center text-red-400">
+                <WifiOff className="w-4 h-4 mr-2" />
+                <span className="text-sm">Sin conexión</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Mensaje de éxito */}
@@ -271,7 +368,7 @@ export default function FormularioPage() {
                 <AlertCircle className="w-6 h-6 mr-3 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="font-semibold text-lg">Error al enviar el feedback</p>
-                  <p className="text-red-300 mt-1">{submitError}</p>
+                  <pre className="text-red-300 mt-1 text-sm whitespace-pre-wrap">{submitError}</pre>
                 </div>
               </div>
             </CardContent>
@@ -376,7 +473,7 @@ export default function FormularioPage() {
 
               <Button
                 type="submit"
-                disabled={isSubmitting || !isFormValid() || submitSuccess}
+                disabled={isSubmitting || !isFormValid() || submitSuccess || connectionStatus === "offline"}
                 className="w-full bg-white text-black hover:bg-gray-200 font-semibold py-4 text-xl rounded-full transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {isSubmitting ? (
@@ -388,6 +485,11 @@ export default function FormularioPage() {
                   <div className="flex items-center justify-center">
                     <CheckCircle className="w-5 h-5 mr-2" />
                     ¡Enviado exitosamente!
+                  </div>
+                ) : connectionStatus === "offline" ? (
+                  <div className="flex items-center justify-center">
+                    <WifiOff className="w-5 h-5 mr-2" />
+                    Sin conexión
                   </div>
                 ) : (
                   "Enviar Feedback"
