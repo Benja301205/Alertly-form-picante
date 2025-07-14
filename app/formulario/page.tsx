@@ -30,6 +30,8 @@ export default function FormularioPage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<"checking" | "online" | "offline">("online")
+  const [submissionId, setSubmissionId] = useState<string | null>(null)
+  const [hasSubmitted, setHasSubmitted] = useState(false)
 
   // Función para verificar conectividad
   const checkConnectivity = async (): Promise<boolean> => {
@@ -53,22 +55,38 @@ export default function FormularioPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Prevenir múltiples envíos
+    if (isSubmitting || submitSuccess || hasSubmitted) {
+      console.log("🚫 Envío bloqueado - ya está en proceso o fue exitoso")
+      return
+    }
+
     setIsSubmitting(true)
     setSubmitError(null)
     setSubmitSuccess(false)
+    setHasSubmitted(true)
+
+    // Generar ID único para esta submisión
+    const uniqueSubmissionId = `feedback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    setSubmissionId(uniqueSubmissionId)
 
     // Verificar conectividad primero
-    console.log("Verificando conectividad...")
+    console.log("🔍 Verificando conectividad...")
     const isConnected = await checkConnectivity()
 
     if (!isConnected) {
       setSubmitError("No se pudo establecer conexión a internet. Por favor, verifica tu conexión y vuelve a intentar.")
       setIsSubmitting(false)
+      setHasSubmitted(false)
       return
     }
 
     // Preparar los datos en un formato más estructurado
     const submissionData = {
+      // ID único para evitar duplicados en el servidor
+      submissionId: uniqueSubmissionId,
+
       // Datos de calificación (convertir a números)
       ratings: {
         returnLikelihood: Number.parseInt(formData.returnLikelihood) || 0,
@@ -80,178 +98,137 @@ export default function FormularioPage() {
         pitchDynamicRating: Number.parseInt(formData.pitchDynamicRating) || 0,
         judgesDecisionRating: Number.parseInt(formData.judgesDecisionRating) || 0,
       },
+
       // Comentarios de texto
       feedback: {
         whatToKeep: formData.whatToKeep.trim(),
         whatToChange: formData.whatToChange.trim(),
         whatToAdd: formData.whatToAdd.trim(),
       },
+
       // Metadatos
       metadata: {
         timestamp: new Date().toISOString(),
         source: "picanthon-feedback-form",
         userAgent: typeof window !== "undefined" ? window.navigator.userAgent : "",
-        submissionId: `feedback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        version: "2.0.0",
       },
     }
 
     const webhookUrl = "https://augustus2425.app.n8n.cloud/webhook/picanthon-survey"
-    let retryCount = 0
-    const maxRetries = 3 // Aumentado a 3 intentos
 
-    while (retryCount < maxRetries) {
-      let controller: AbortController | null = null
-      let timeoutId: NodeJS.Timeout | null = null
+    // Solo UN intento - sin reintentos automáticos para evitar duplicados
+    try {
+      console.log(`🚀 Enviando encuesta con ID: ${uniqueSubmissionId}`)
+      console.log(`📡 URL: ${webhookUrl}`)
+      console.log(`📊 Datos:`, submissionData)
 
-      try {
-        console.log(`🚀 Intento ${retryCount + 1} de ${maxRetries}`)
-        console.log(`📡 URL: ${webhookUrl}`)
-        console.log(`📊 Datos:`, submissionData)
+      const controller = new AbortController()
 
-        controller = new AbortController()
+      // Timeout de 30 segundos
+      const timeoutId = setTimeout(() => {
+        console.log(`⏰ Timeout alcanzado`)
+        controller.abort()
+      }, 30000)
 
-        // Configurar timeout más largo
-        timeoutId = setTimeout(() => {
-          console.log(`⏰ Timeout alcanzado en intento ${retryCount + 1}`)
-          if (controller) {
-            controller.abort()
-          }
-        }, 20000) // 20 segundos
+      console.log(`⏳ Enviando request (timeout: 30s)...`)
 
-        console.log(`⏳ Enviando request (timeout: 20s)...`)
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(submissionData),
+        signal: controller.signal,
+        mode: "cors",
+      })
 
-        const response = await fetch(webhookUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            // Agregar headers adicionales para CORS
-            "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "Content-Type",
-          },
-          body: JSON.stringify(submissionData),
-          signal: controller.signal,
-          mode: "cors", // Especificar modo CORS explícitamente
-        })
+      clearTimeout(timeoutId)
 
-        // Limpiar timeout si la request es exitosa
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-          timeoutId = null
+      console.log(`📨 Respuesta recibida:`, {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+      })
+
+      if (response.ok) {
+        // Éxito
+        console.log(`🎉 Envío exitoso`)
+        setSubmitSuccess(true)
+
+        // Guardar en localStorage para evitar reenvíos accidentales
+        localStorage.setItem("lastSubmissionId", uniqueSubmissionId)
+        localStorage.setItem("lastSubmissionTime", Date.now().toString())
+
+        setTimeout(() => {
+          router.push("/resultados")
+        }, 1500)
+      } else {
+        // Error del servidor
+        let errorText = "Error desconocido"
+        try {
+          errorText = await response.text()
+        } catch (e) {
+          console.log("No se pudo leer el texto del error:", e)
         }
 
-        console.log(`✅ Respuesta recibida (intento ${retryCount + 1}):`, {
+        console.error(`❌ Error del servidor:`, {
           status: response.status,
           statusText: response.statusText,
-          ok: response.ok,
-          headers: Object.fromEntries(response.headers.entries()),
+          body: errorText,
         })
 
-        if (response.ok) {
-          // Éxito
-          console.log(`🎉 Envío exitoso en intento ${retryCount + 1}`)
-          setSubmitSuccess(true)
-          setTimeout(() => {
-            router.push("/resultados")
-          }, 1500)
-          return
-        } else {
-          // Error del servidor
-          let errorText = "Error desconocido"
-          try {
-            errorText = await response.text()
-          } catch (e) {
-            console.log("No se pudo leer el texto del error:", e)
-          }
+        setHasSubmitted(false) // Permitir reintento manual
 
-          console.error(`❌ Error del servidor (intento ${retryCount + 1}):`, {
-            status: response.status,
-            statusText: response.statusText,
-            body: errorText,
-          })
-
-          if (response.status >= 500) {
-            // Error del servidor - reintentar
-            if (retryCount < maxRetries - 1) {
-              retryCount++
-              console.log(`🔄 Reintentando en 3 segundos... (intento ${retryCount + 1}/${maxRetries})`)
-              await new Promise((resolve) => setTimeout(resolve, 3000))
-              continue
-            } else {
-              setSubmitError(
-                `Error del servidor (${response.status}). El sistema está experimentando problemas técnicos. Por favor, inténtalo de nuevo en unos minutos.`,
-              )
-            }
-          } else if (response.status >= 400 && response.status < 500) {
-            // Error del cliente - no reintentar
-            setSubmitError(
-              `Error en la solicitud (${response.status}). Hay un problema con los datos enviados. Por favor, recarga la página e inténtalo de nuevo.`,
-            )
-          }
-          break
-        }
-      } catch (error) {
-        // Limpiar timeout en caso de error
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-          timeoutId = null
-        }
-
-        console.error(`💥 Error en intento ${retryCount + 1}:`, {
-          name: error instanceof Error ? error.name : "Unknown",
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        })
-
-        if (error instanceof DOMException && error.name === "AbortError") {
-          console.log(`⏰ Request cancelada por timeout en intento ${retryCount + 1}`)
-          if (retryCount < maxRetries - 1) {
-            retryCount++
-            console.log(`🔄 Reintentando por timeout... (intento ${retryCount + 1}/${maxRetries})`)
-            await new Promise((resolve) => setTimeout(resolve, 3000))
-            continue
-          } else {
-            setSubmitError(
-              "La conexión está tardando demasiado tiempo. Esto puede deberse a problemas de red o que el servidor esté ocupado. Por favor, inténtalo de nuevo.",
-            )
-          }
-        } else if (
-          error instanceof TypeError &&
-          (error.message.includes("fetch") || error.message.includes("Failed to fetch"))
-        ) {
-          // Error de red específico
-          console.log(`🌐 Error de red detectado en intento ${retryCount + 1}`)
-
-          if (retryCount < maxRetries - 1) {
-            retryCount++
-            console.log(`🔄 Reintentando por error de red... (intento ${retryCount + 1}/${maxRetries})`)
-
-            // Verificar conectividad antes del siguiente intento
-            const stillConnected = await checkConnectivity()
-            if (!stillConnected) {
-              setSubmitError("Se perdió la conexión a internet. Por favor, verifica tu conexión y vuelve a intentar.")
-              break
-            }
-
-            await new Promise((resolve) => setTimeout(resolve, 3000))
-            continue
-          } else {
-            setSubmitError(
-              "Error de conexión persistente. Esto puede deberse a:\n• Problemas de conectividad a internet\n• El servidor no está disponible temporalmente\n• Restricciones de red o firewall\n\nPor favor, verifica tu conexión e inténtalo de nuevo.",
-            )
-          }
-        } else {
-          // Otros errores
-          console.log(`🔥 Error desconocido en intento ${retryCount + 1}`)
+        if (response.status >= 500) {
           setSubmitError(
-            `Error inesperado: ${error instanceof Error ? error.message : String(error)}. Por favor, recarga la página e inténtalo de nuevo.`,
+            `Error del servidor (${response.status}). El sistema está experimentando problemas técnicos. Por favor, espera unos minutos e inténtalo de nuevo.`,
+          )
+        } else if (response.status >= 400 && response.status < 500) {
+          setSubmitError(
+            `Error en la solicitud (${response.status}). Hay un problema con los datos enviados. Por favor, recarga la página e inténtalo de nuevo.`,
           )
         }
-        break
+      }
+    } catch (error) {
+      console.error(`💥 Error durante el envío:`, {
+        name: error instanceof Error ? error.name : "Unknown",
+        message: error instanceof Error ? error.message : String(error),
+      })
+
+      setHasSubmitted(false) // Permitir reintento manual
+
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setSubmitError(
+          "La conexión tardó demasiado tiempo. El servidor puede estar ocupado. Por favor, espera unos minutos e inténtalo de nuevo.",
+        )
+      } else if (
+        error instanceof TypeError &&
+        (error.message.includes("fetch") || error.message.includes("Failed to fetch"))
+      ) {
+        setSubmitError(
+          "Error de conexión. Esto puede deberse a:\n• Problemas de conectividad a internet\n• El servidor no está disponible temporalmente\n• Restricciones de red\n\nPor favor, verifica tu conexión e inténtalo de nuevo.",
+        )
+      } else {
+        setSubmitError(
+          `Error inesperado: ${error instanceof Error ? error.message : String(error)}. Por favor, recarga la página e inténtalo de nuevo.`,
+        )
       }
     }
 
     setIsSubmitting(false)
+  }
+
+  // Verificar si ya se envió recientemente
+  const checkRecentSubmission = () => {
+    const lastSubmissionTime = localStorage.getItem("lastSubmissionTime")
+    if (lastSubmissionTime) {
+      const timeDiff = Date.now() - Number.parseInt(lastSubmissionTime)
+      const fiveMinutes = 5 * 60 * 1000
+      return timeDiff < fiveMinutes
+    }
+    return false
   }
 
   const handleRatingChange = (field: string, value: string) => {
@@ -353,6 +330,7 @@ export default function FormularioPage() {
                 <CheckCircle className="w-6 h-6 mr-3" />
                 <div>
                   <p className="font-semibold text-lg">¡Feedback enviado exitosamente!</p>
+                  {submissionId && <p className="text-green-300 text-sm">ID: {submissionId}</p>}
                   <p className="text-green-300">Redirigiendo a los resultados...</p>
                 </div>
               </div>
@@ -373,6 +351,15 @@ export default function FormularioPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Advertencia de envío reciente */}
+        {checkRecentSubmission() && (
+          <div className="mb-8 p-4 bg-yellow-900/30 border border-yellow-600 rounded-lg">
+            <p className="text-yellow-300 text-center">
+              ⚠️ Parece que ya enviaste una encuesta recientemente. Si necesitas enviar otra, espera unos minutos.
+            </p>
+          </div>
         )}
 
         <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-2xl">
@@ -473,7 +460,13 @@ export default function FormularioPage() {
 
               <Button
                 type="submit"
-                disabled={isSubmitting || !isFormValid() || submitSuccess || connectionStatus === "offline"}
+                disabled={
+                  isSubmitting ||
+                  !isFormValid() ||
+                  submitSuccess ||
+                  connectionStatus === "offline" ||
+                  checkRecentSubmission()
+                }
                 className="w-full bg-white text-black hover:bg-gray-200 font-semibold py-4 text-xl rounded-full transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {isSubmitting ? (
@@ -491,6 +484,8 @@ export default function FormularioPage() {
                     <WifiOff className="w-5 h-5 mr-2" />
                     Sin conexión
                   </div>
+                ) : checkRecentSubmission() ? (
+                  "Envío reciente detectado"
                 ) : (
                   "Enviar Feedback"
                 )}
