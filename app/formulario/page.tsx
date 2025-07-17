@@ -1,505 +1,442 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, AlertCircle, CheckCircle, Wifi, WifiOff } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useToast } from "@/hooks/use-toast"
+import { Loader2, Wifi, WifiOff, CheckCircle, AlertCircle } from "lucide-react"
+import { v4 as uuidv4 } from "uuid"
+
+// Define the structure for the form data
+interface FormData {
+  returnLikelihood: number
+  venueRating: number
+  foodRating: number
+  mentorExperience: number
+  miniGamesRating: number
+  taskAndOutputRating: number
+  pitchDynamicRating: number
+  judgesDecisionRating: number
+  whatToKeep: string
+  whatToChange: string
+  whatToAdd: string
+  submissionId: string // Add submissionId to the form data
+}
+
+const SUBMISSION_KEY = "lastSubmissionTime"
+const SUBMISSION_COOLDOWN_MS = 300000 // 5 minutes cooldown
 
 export default function FormularioPage() {
+  const { toast } = useToast()
   const router = useRouter()
-  const [formData, setFormData] = useState({
-    returnLikelihood: "",
-    venueRating: "",
-    foodRating: "",
-    mentorExperience: "",
-    miniGamesRating: "",
-    taskAndOutputRating: "",
-    pitchDynamicRating: "",
-    judgesDecisionRating: "",
-    whatToKeep: "",
-    whatToChange: "",
-    whatToAdd: "",
-  })
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const [submitSuccess, setSubmitSuccess] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<"checking" | "online" | "offline">("online")
-  const [submissionId, setSubmissionId] = useState<string | null>(null)
-  const [hasSubmitted, setHasSubmitted] = useState(false)
-  const [recentSubmission, setRecentSubmission] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
+  const [submissionError, setSubmissionError] = useState<string | null>(null)
+  const [hasSubmitted, setHasSubmitted] = useState(false) // New state to track if form has been submitted
+  const formRef = useRef<HTMLFormElement>(null)
 
-  // Verificar si ya se envió recientemente (solo en el cliente)
+  // Check network status
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const lastSubmissionTime = localStorage.getItem("lastSubmissionTime")
-      if (lastSubmissionTime) {
-        const timeDiff = Date.now() - Number.parseInt(lastSubmissionTime)
-        const fiveMinutes = 5 * 60 * 1000
-        setRecentSubmission(timeDiff < fiveMinutes)
-      }
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    // Initial check
+    setIsOnline(navigator.onLine)
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
     }
   }, [])
 
-  // Función para verificar conectividad
-  const checkConnectivity = async (): Promise<boolean> => {
+  // Check for recent submission in localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const lastSubmissionTime = localStorage.getItem(SUBMISSION_KEY)
+      if (lastSubmissionTime) {
+        const timeDiff = Date.now() - Number.parseInt(lastSubmissionTime, 10)
+        // Consider a submission recent if it was within the last 5 minutes (300,000 ms)
+        if (timeDiff < SUBMISSION_COOLDOWN_MS) {
+          setHasSubmitted(true)
+          toast({
+            title: "Encuesta ya enviada",
+            description:
+              "Parece que ya enviaste una encuesta recientemente. Si crees que es un error, puedes intentarlo de nuevo.",
+            variant: "warning",
+          })
+        }
+      }
+    }
+  }, [toast])
+
+  const checkConnectivity = async () => {
     try {
-      setConnectionStatus("checking")
-      // Intentar hacer una request simple para verificar conectividad
-      const response = await fetch("https://httpbin.org/get", {
-        method: "GET",
-        mode: "cors",
-        signal: AbortSignal.timeout(5000),
-      })
-      const isOnline = response.ok
-      setConnectionStatus(isOnline ? "online" : "offline")
-      return isOnline
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 seconds timeout for connectivity check
+      const response = await fetch("https://httpbin.org/status/200", { signal: controller.signal })
+      clearTimeout(timeoutId)
+      return response.ok
     } catch (error) {
-      console.log("Connectivity check failed:", error)
-      setConnectionStatus("offline")
+      console.error("Connectivity check failed:", error)
       return false
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
 
-    // Prevenir múltiples envíos
-    if (isSubmitting || submitSuccess || hasSubmitted) {
-      console.log("🚫 Envío bloqueado - ya está en proceso o fue exitoso")
+    if (isSubmitting || hasSubmitted) {
+      toast({
+        title: "Envío en curso o ya realizado",
+        description: "Por favor, espera a que termine el envío actual o verifica si ya enviaste la encuesta.",
+        variant: "warning",
+      })
       return
     }
 
     setIsSubmitting(true)
-    setSubmitError(null)
-    setSubmitSuccess(false)
-    setHasSubmitted(true)
+    setSubmissionError(null)
 
-    // Generar ID único para esta submisión
-    const uniqueSubmissionId = `feedback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    setSubmissionId(uniqueSubmissionId)
+    const form = event.currentTarget
+    const formData = new FormData(form)
 
-    // Verificar conectividad primero
-    console.log("🔍 Verificando conectividad...")
-    const isConnected = await checkConnectivity()
+    const data: FormData = {
+      returnLikelihood: Number.parseInt(formData.get("returnLikelihood") as string),
+      venueRating: Number.parseInt(formData.get("venueRating") as string),
+      foodRating: Number.parseInt(formData.get("foodRating") as string),
+      mentorExperience: Number.parseInt(formData.get("mentorExperience") as string),
+      miniGamesRating: Number.parseInt(formData.get("miniGamesRating") as string),
+      taskAndOutputRating: Number.parseInt(formData.get("taskAndOutputRating") as string),
+      pitchDynamicRating: Number.parseInt(formData.get("pitchDynamicRating") as string),
+      judgesDecisionRating: Number.parseInt(formData.get("judgesDecisionRating") as string),
+      whatToKeep: formData.get("whatToKeep") as string,
+      whatToChange: formData.get("whatToChange") as string,
+      whatToAdd: formData.get("whatToAdd") as string,
+      submissionId: uuidv4(), // Generate a unique ID for this submission
+    }
 
-    if (!isConnected) {
-      setSubmitError("No se pudo establecer conexión a internet. Por favor, verifica tu conexión y vuelve a intentar.")
+    console.log(`[${data.submissionId}] Iniciando envío de formulario. Datos:`, data)
+
+    // Perform connectivity check before actual submission
+    const online = await checkConnectivity()
+    setIsOnline(online)
+    if (!online) {
+      setSubmissionError("No hay conexión a internet. Por favor, revisa tu conexión y vuelve a intentarlo.")
       setIsSubmitting(false)
-      setHasSubmitted(false)
+      toast({
+        title: "Error de conexión",
+        description: "No se pudo enviar la encuesta. Revisa tu conexión a internet.",
+        variant: "destructive",
+      })
+      console.error(`[${data.submissionId}] Error: Sin conexión a internet.`)
       return
     }
 
-    // Preparar los datos en un formato más estructurado
-    const submissionData = {
-      // ID único para evitar duplicados en el servidor
-      submissionId: uniqueSubmissionId,
+    const WEBHOOK_URL = "https://snowmba.app.n8n.cloud/webhook/picanthon-survey" // Updated webhook URL
 
-      // Datos de calificación (convertir a números)
-      ratings: {
-        returnLikelihood: Number.parseInt(formData.returnLikelihood) || 0,
-        venueRating: Number.parseInt(formData.venueRating) || 0,
-        foodRating: Number.parseInt(formData.foodRating) || 0,
-        mentorExperience: Number.parseInt(formData.mentorExperience) || 0,
-        miniGamesRating: Number.parseInt(formData.miniGamesRating) || 0,
-        taskAndOutputRating: Number.parseInt(formData.taskAndOutputRating) || 0,
-        pitchDynamicRating: Number.parseInt(formData.pitchDynamicRating) || 0,
-        judgesDecisionRating: Number.parseInt(formData.judgesDecisionRating) || 0,
-      },
-
-      // Comentarios de texto
-      feedback: {
-        whatToKeep: formData.whatToKeep.trim(),
-        whatToChange: formData.whatToChange.trim(),
-        whatToAdd: formData.whatToAdd.trim(),
-      },
-
-      // Metadatos
-      metadata: {
-        timestamp: new Date().toISOString(),
-        source: "picanthon-feedback-form",
-        userAgent: typeof window !== "undefined" ? window.navigator.userAgent : "",
-        version: "2.0.0",
-      },
-    }
-
-    const webhookUrl = "https://augustus2425.app.n8n.cloud/webhook/picanthon-survey"
-
-    // Solo UN intento - sin reintentos automáticos para evitar duplicados
     try {
-      console.log(`🚀 Enviando encuesta con ID: ${uniqueSubmissionId}`)
-      console.log(`📡 URL: ${webhookUrl}`)
-      console.log(`📊 Datos:`, submissionData)
-
       const controller = new AbortController()
-
-      // Timeout de 30 segundos
       const timeoutId = setTimeout(() => {
-        console.log(`⏰ Timeout alcanzado`)
         controller.abort()
-      }, 30000)
+        console.warn(`[${data.submissionId}] Solicitud abortada por timeout (30s).`)
+      }, 30000) // Increased timeout to 30 seconds for AI processing
 
-      console.log(`⏳ Enviando request (timeout: 30s)...`)
-
-      const response = await fetch(webhookUrl, {
+      console.log(`[${data.submissionId}] Enviando datos al webhook: ${WEBHOOK_URL}`)
+      const response = await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
+          "Access-Control-Allow-Origin": "*", // Explicit CORS header
         },
-        body: JSON.stringify(submissionData),
+        body: JSON.stringify(data),
         signal: controller.signal,
-        mode: "cors",
       })
+      clearTimeout(timeoutId) // Clear timeout if fetch completes
 
-      clearTimeout(timeoutId)
+      console.log(`[${data.submissionId}] Respuesta recibida. Status: ${response.status}`)
+      console.log(`[${data.submissionId}] Headers de respuesta:`, Object.fromEntries(response.headers.entries()))
 
-      console.log(`📨 Respuesta recibida:`, {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-      })
-
-      if (response.ok) {
-        // Éxito
-        console.log(`🎉 Envío exitoso`)
-        setSubmitSuccess(true)
-
-        // Guardar en localStorage para evitar reenvíos accidentales (solo en el cliente)
-        if (typeof window !== "undefined") {
-          localStorage.setItem("lastSubmissionId", uniqueSubmissionId)
-          localStorage.setItem("lastSubmissionTime", Date.now().toString())
-        }
-
-        setTimeout(() => {
-          router.push("/resultados")
-        }, 1500)
-      } else {
-        // Error del servidor
-        let errorText = "Error desconocido"
-        try {
-          errorText = await response.text()
-        } catch (e) {
-          console.log("No se pudo leer el texto del error:", e)
-        }
-
-        console.error(`❌ Error del servidor:`, {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText,
-        })
-
-        setHasSubmitted(false) // Permitir reintento manual
-
-        if (response.status >= 500) {
-          setSubmitError(
-            `Error del servidor (${response.status}). El sistema está experimentando problemas técnicos. Por favor, espera unos minutos e inténtalo de nuevo.`,
-          )
-        } else if (response.status >= 400 && response.status < 500) {
-          setSubmitError(
-            `Error en la solicitud (${response.status}). Hay un problema con los datos enviados. Por favor, recarga la página e inténtalo de nuevo.`,
-          )
-        }
+      if (!response.ok) {
+        const errorBody = await response.text()
+        console.error(`[${data.submissionId}] Error en la respuesta del servidor:`, errorBody)
+        throw new Error(`Error del servidor (${response.status}): ${errorBody || response.statusText}`)
       }
-    } catch (error) {
-      console.error(`💥 Error durante el envío:`, {
-        name: error instanceof Error ? error.name : "Unknown",
-        message: error instanceof Error ? error.message : String(error),
-      })
 
-      setHasSubmitted(false) // Permitir reintento manual
+      const result = await response.json()
+      console.log(`[${data.submissionId}] Envío exitoso. Respuesta del webhook:`, result)
 
-      if (error instanceof DOMException && error.name === "AbortError") {
-        setSubmitError(
-          "La conexión tardó demasiado tiempo. El servidor puede estar ocupado. Por favor, espera unos minutos e inténtalo de nuevo.",
-        )
-      } else if (
-        error instanceof TypeError &&
-        (error.message.includes("fetch") || error.message.includes("Failed to fetch"))
-      ) {
-        setSubmitError(
-          "Error de conexión. Esto puede deberse a:\n• Problemas de conectividad a internet\n• El servidor no está disponible temporalmente\n• Restricciones de red\n\nPor favor, verifica tu conexión e inténtalo de nuevo.",
-        )
-      } else {
-        setSubmitError(
-          `Error inesperado: ${error instanceof Error ? error.message : String(error)}. Por favor, recarga la página e inténtalo de nuevo.`,
-        )
+      if (typeof window !== "undefined") {
+        localStorage.setItem(SUBMISSION_KEY, Date.now().toString())
       }
+      setHasSubmitted(true) // Mark as submitted
+      formRef.current?.reset() // Reset the form fields
+
+      toast({
+        title: "¡Encuesta enviada!",
+        description: "Gracias por tu feedback. Redirigiendo a los resultados...",
+        variant: "success",
+      })
+      router.push("/resultados")
+    } catch (error: any) {
+      console.error(`[${data.submissionId}] Error durante el envío:`, error)
+      let errorMessage = "Ocurrió un error inesperado al enviar la encuesta."
+
+      if (error.name === "AbortError") {
+        errorMessage = "La solicitud tardó demasiado en responder. Por favor, inténtalo de nuevo."
+      } else if (error.message.includes("Failed to fetch")) {
+        errorMessage = "Error de red: No se pudo conectar con el servidor. Revisa tu conexión a internet."
+      } else if (error.message.includes("Error del servidor")) {
+        errorMessage = `Error del servidor: ${error.message.split(": ")[1] || "Respuesta inesperada."}`
+      } else {
+        errorMessage = `Error: ${error.message}`
+      }
+
+      setSubmissionError(errorMessage)
+      toast({
+        title: "Error de envío",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setIsSubmitting(false)
-  }
-
-  const handleRatingChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-    // Limpiar errores cuando el usuario hace cambios
-    if (submitError) setSubmitError(null)
-  }
-
-  const handleTextChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-    // Limpiar errores cuando el usuario hace cambios
-    if (submitError) setSubmitError(null)
-  }
-
-  const RatingQuestion = ({
-    question,
-    field,
-    value,
-  }: {
-    question: string
-    field: string
-    value: string
-  }) => (
-    <div className="space-y-4">
-      <p className="text-white font-medium text-lg">{question}</p>
-      <RadioGroup value={value} onValueChange={(val) => handleRatingChange(field, val)} className="flex space-x-6">
-        {[1, 2, 3, 4, 5].map((num) => (
-          <div key={num} className="flex items-center space-x-2">
-            <RadioGroupItem
-              value={num.toString()}
-              id={`${field}-${num}`}
-              className="border-white text-orange-400 focus:ring-orange-400"
-            />
-            <Label htmlFor={`${field}-${num}`} className="text-white cursor-pointer text-lg font-medium">
-              {num}
-            </Label>
-          </div>
-        ))}
-      </RadioGroup>
-    </div>
-  )
-
-  const isFormValid = () => {
-    const requiredRatings = [
-      "returnLikelihood",
-      "venueRating",
-      "foodRating",
-      "mentorExperience",
-      "miniGamesRating",
-      "taskAndOutputRating",
-      "pitchDynamicRating",
-      "judgesDecisionRating",
-    ]
-    return requiredRatings.every((field) => formData[field as keyof typeof formData] !== "")
   }
 
   return (
-    <div className="min-h-screen picante-gradient p-4">
-      <div className="max-w-3xl mx-auto">
-        <div className="mb-8 pt-8">
-          <Link href="/" className="inline-flex items-center text-white hover:text-orange-400 transition-colors">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Volver al inicio
-          </Link>
-        </div>
-
-        <div className="text-center mb-12">
-          <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">Formulario de Feedback</h1>
-          <p className="text-gray-200 text-xl">Tu opinión nos ayuda a mejorar la experiencia para todos.</p>
-
-          {/* Indicador de conectividad */}
-          <div className="flex items-center justify-center mt-4">
-            {connectionStatus === "checking" && (
-              <div className="flex items-center text-yellow-400">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-400 mr-2"></div>
-                <span className="text-sm">Verificando conexión...</span>
-              </div>
-            )}
-            {connectionStatus === "online" && (
-              <div className="flex items-center text-green-400">
-                <Wifi className="w-4 h-4 mr-2" />
-                <span className="text-sm">Conectado</span>
-              </div>
-            )}
-            {connectionStatus === "offline" && (
-              <div className="flex items-center text-red-400">
-                <WifiOff className="w-4 h-4 mr-2" />
-                <span className="text-sm">Sin conexión</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Mensaje de éxito */}
-        {submitSuccess && (
-          <Card className="bg-green-900/30 border-green-600 backdrop-blur-sm shadow-xl mb-8">
-            <CardContent className="p-6">
-              <div className="flex items-center text-green-400">
-                <CheckCircle className="w-6 h-6 mr-3" />
-                <div>
-                  <p className="font-semibold text-lg">¡Feedback enviado exitosamente!</p>
-                  {submissionId && <p className="text-green-300 text-sm">ID: {submissionId}</p>}
-                  <p className="text-green-300">Redirigiendo a los resultados...</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Mensaje de error */}
-        {submitError && (
-          <Card className="bg-red-900/30 border-red-600 backdrop-blur-sm shadow-xl mb-8">
-            <CardContent className="p-6">
-              <div className="flex items-start text-red-400">
-                <AlertCircle className="w-6 h-6 mr-3 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="font-semibold text-lg">Error al enviar el feedback</p>
-                  <pre className="text-red-300 mt-1 text-sm whitespace-pre-wrap">{submitError}</pre>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Advertencia de envío reciente */}
-        {recentSubmission && (
-          <div className="mb-8 p-4 bg-yellow-900/30 border border-yellow-600 rounded-lg">
-            <p className="text-yellow-300 text-center">
-              ⚠️ Parece que ya enviaste una encuesta recientemente. Si necesitas enviar otra, espera unos minutos.
-            </p>
-          </div>
-        )}
-
-        <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-white text-2xl">Califica tu experiencia</CardTitle>
-            <p className="text-gray-300 text-lg">Del 1 al 5 (siendo 5 excelente)</p>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-10">
-              {/* Rating Questions */}
-              <RatingQuestion
-                question="¿Del 1 al 5 cuán probable es que vuelvas a anotarte a la segunda edición de la Picanthón?"
-                field="returnLikelihood"
-                value={formData.returnLikelihood}
-              />
-
-              <RatingQuestion
-                question="¿Del 1 al 5 qué te pareció el lugar?"
-                field="venueRating"
-                value={formData.venueRating}
-              />
-
-              <RatingQuestion
-                question="¿Del 1 al 5 qué te pareció la comida?"
-                field="foodRating"
-                value={formData.foodRating}
-              />
-
-              <RatingQuestion
-                question="¿Del 1 al 5 cómo fue la experiencia de tu grupo con los mentores?"
-                field="mentorExperience"
-                value={formData.mentorExperience}
-              />
-
-              <RatingQuestion
-                question="¿Del 1 al 5 qué te parecieron los mini games?"
-                field="miniGamesRating"
-                value={formData.miniGamesRating}
-              />
-
-              <RatingQuestion
-                question="¿Del 1 al 5 qué te pareció la consigna y el output esperado?"
-                field="taskAndOutputRating"
-                value={formData.taskAndOutputRating}
-              />
-
-              <RatingQuestion
-                question="¿Del 1 al 5 qué te pareció la dinámica del pitch/pregunta de mentores? (¿Pudieron transmitir lo que habían creado?)"
-                field="pitchDynamicRating"
-                value={formData.pitchDynamicRating}
-              />
-
-              <RatingQuestion
-                question="¿Del 1 al 5 qué te pareció la decisión final de los jueces?"
-                field="judgesDecisionRating"
-                value={formData.judgesDecisionRating}
-              />
-
-              {/* Open-ended Questions */}
-              <div className="space-y-4">
-                <Label htmlFor="whatToKeep" className="text-white font-medium text-lg">
-                  ¿Qué mantendrías de la hackathon? ¿Qué fue lo que más te gustó?
-                </Label>
-                <Textarea
-                  id="whatToKeep"
-                  value={formData.whatToKeep}
-                  onChange={(e) => handleTextChange("whatToKeep", e.target.value)}
-                  className="bg-black/20 border-gray-500 text-white placeholder:text-gray-400 min-h-[100px] text-lg"
-                  placeholder="Comparte lo que más disfrutaste y te gustaría que se mantenga..."
-                />
-              </div>
-
-              <div className="space-y-4">
-                <Label htmlFor="whatToChange" className="text-white font-medium text-lg">
-                  ¿Qué cambiarías de la hackathon? ¿Qué fue lo que menos te gustó?
-                </Label>
-                <Textarea
-                  id="whatToChange"
-                  value={formData.whatToChange}
-                  onChange={(e) => handleTextChange("whatToChange", e.target.value)}
-                  className="bg-black/20 border-gray-500 text-white placeholder:text-gray-400 min-h-[100px] text-lg"
-                  placeholder="Cuéntanos qué aspectos crees que podrían mejorarse..."
-                />
-              </div>
-
-              <div className="space-y-4">
-                <Label htmlFor="whatToAdd" className="text-white font-medium text-lg">
-                  ¿Qué agregarías a la Picanthón?
-                </Label>
-                <Textarea
-                  id="whatToAdd"
-                  value={formData.whatToAdd}
-                  onChange={(e) => handleTextChange("whatToAdd", e.target.value)}
-                  className="bg-black/20 border-gray-500 text-white placeholder:text-gray-400 min-h-[100px] text-lg"
-                  placeholder="¿Qué nuevas actividades, recursos o elementos sumarías?"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                disabled={
-                  isSubmitting || !isFormValid() || submitSuccess || connectionStatus === "offline" || recentSubmission
-                }
-                className="w-full bg-white text-black hover:bg-gray-200 font-semibold py-4 text-xl rounded-full transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-              >
-                {isSubmitting ? (
-                  <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black mr-2"></div>
-                    Enviando feedback...
+    <div className="min-h-screen picante-gradient flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl">
+        <CardHeader className="text-center">
+          <CardTitle className="text-3xl font-bold text-white">Encuesta Picanthón</CardTitle>
+          <p className="text-gray-300">Tu feedback es muy importante para nosotros.</p>
+        </CardHeader>
+        <CardContent>
+          {!isOnline && (
+            <div className="bg-red-900/30 border border-red-600 text-red-400 p-3 rounded-md flex items-center mb-4">
+              <WifiOff className="w-5 h-5 mr-2" />
+              Estás sin conexión. Por favor, revisa tu conexión a internet.
+            </div>
+          )}
+          {submissionError && (
+            <div className="bg-red-900/30 border border-red-600 text-red-400 p-3 rounded-md flex items-center mb-4">
+              <AlertCircle className="w-5 h-5 mr-2" />
+              {submissionError}
+            </div>
+          )}
+          {hasSubmitted && (
+            <div className="bg-green-900/30 border border-green-600 text-green-400 p-3 rounded-md flex items-center mb-4">
+              <CheckCircle className="w-5 h-5 mr-2" />
+              ¡Gracias! Tu encuesta ya ha sido enviada.
+            </div>
+          )}
+          <form onSubmit={handleSubmit} className="space-y-6" ref={formRef}>
+            <div className="space-y-2">
+              <Label htmlFor="returnLikelihood" className="text-white text-lg">
+                ¿Qué tan probable es que vuelvas a participar en un evento de Picante Fund?
+              </Label>
+              <RadioGroup name="returnLikelihood" defaultValue="3" className="flex space-x-4">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <div key={value} className="flex items-center space-x-2">
+                    <RadioGroupItem value={String(value)} id={`returnLikelihood-${value}`} />
+                    <Label htmlFor={`returnLikelihood-${value}`} className="text-gray-300">
+                      {value}
+                    </Label>
                   </div>
-                ) : submitSuccess ? (
-                  <div className="flex items-center justify-center">
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    ¡Enviado exitosamente!
-                  </div>
-                ) : connectionStatus === "offline" ? (
-                  <div className="flex items-center justify-center">
-                    <WifiOff className="w-5 h-5 mr-2" />
-                    Sin conexión
-                  </div>
-                ) : recentSubmission ? (
-                  "Envío reciente detectado"
-                ) : (
-                  "Enviar Feedback"
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                ))}
+              </RadioGroup>
+              <p className="text-sm text-gray-400">1 = Muy improbable, 5 = Muy probable</p>
+            </div>
 
-        <div className="mt-8 text-center text-gray-400">
-          <p>
-            Una iniciativa de <span className="text-orange-400 font-semibold">Picante Fund</span>
-          </p>
-        </div>
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="venueRating" className="text-white text-lg">
+                Califica el lugar del evento:
+              </Label>
+              <RadioGroup name="venueRating" defaultValue="3" className="flex space-x-4">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <div key={value} className="flex items-center space-x-2">
+                    <RadioGroupItem value={String(value)} id={`venueRating-${value}`} />
+                    <Label htmlFor={`venueRating-${value}`} className="text-gray-300">
+                      {value}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              <p className="text-sm text-gray-400">1 = Muy malo, 5 = Excelente</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="foodRating" className="text-white text-lg">
+                Califica la comida y bebidas:
+              </Label>
+              <RadioGroup name="foodRating" defaultValue="3" className="flex space-x-4">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <div key={value} className="flex items-center space-x-2">
+                    <RadioGroupItem value={String(value)} id={`foodRating-${value}`} />
+                    <Label htmlFor={`foodRating-${value}`} className="text-gray-300">
+                      {value}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              <p className="text-sm text-gray-400">1 = Muy malo, 5 = Excelente</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="mentorExperience" className="text-white text-lg">
+                Califica la experiencia con los mentores:
+              </Label>
+              <RadioGroup name="mentorExperience" defaultValue="3" className="flex space-x-4">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <div key={value} className="flex items-center space-x-2">
+                    <RadioGroupItem value={String(value)} id={`mentorExperience-${value}`} />
+                    <Label htmlFor={`mentorExperience-${value}`} className="text-gray-300">
+                      {value}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              <p className="text-sm text-gray-400">1 = Muy malo, 5 = Excelente</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="miniGamesRating" className="text-white text-lg">
+                Califica los mini-games/actividades:
+              </Label>
+              <RadioGroup name="miniGamesRating" defaultValue="3" className="flex space-x-4">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <div key={value} className="flex items-center space-x-2">
+                    <RadioGroupItem value={String(value)} id={`miniGamesRating-${value}`} />
+                    <Label htmlFor={`miniGamesRating-${value}`} className="text-gray-300">
+                      {value}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              <p className="text-sm text-gray-400">1 = Muy malo, 5 = Excelente</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="taskAndOutputRating" className="text-white text-lg">
+                Califica la consigna y el output esperado:
+              </Label>
+              <RadioGroup name="taskAndOutputRating" defaultValue="3" className="flex space-x-4">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <div key={value} className="flex items-center space-x-2">
+                    <RadioGroupItem value={String(value)} id={`taskAndOutputRating-${value}`} />
+                    <Label htmlFor={`taskAndOutputRating-${value}`} className="text-gray-300">
+                      {value}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              <p className="text-sm text-gray-400">1 = Muy malo, 5 = Excelente</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pitchDynamicRating" className="text-white text-lg">
+                Califica la dinámica de pitch:
+              </Label>
+              <RadioGroup name="pitchDynamicRating" defaultValue="3" className="flex space-x-4">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <div key={value} className="flex items-center space-x-2">
+                    <RadioGroupItem value={String(value)} id={`pitchDynamicRating-${value}`} />
+                    <Label htmlFor={`pitchDynamicRating-${value}`} className="text-gray-300">
+                      {value}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              <p className="text-sm text-gray-400">1 = Muy malo, 5 = Excelente</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="judgesDecisionRating" className="text-white text-lg">
+                Califica la decisión de los jueces:
+              </Label>
+              <RadioGroup name="judgesDecisionRating" defaultValue="3" className="flex space-x-4">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <div key={value} className="flex items-center space-x-2">
+                    <RadioGroupItem value={String(value)} id={`judgesDecisionRating-${value}`} />
+                    <Label htmlFor={`judgesDecisionRating-${value}`} className="text-gray-300">
+                      {value}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              <p className="text-sm text-gray-400">1 = Muy malo, 5 = Excelente</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="whatToKeep" className="text-white text-lg">
+                ¿Qué mantendrías para futuros eventos?
+              </Label>
+              <Textarea
+                id="whatToKeep"
+                name="whatToKeep"
+                placeholder="Ej: La energía de los mentores, la variedad de la comida..."
+                className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="whatToChange" className="text-white text-lg">
+                ¿Qué cambiarías o mejorarías?
+              </Label>
+              <Textarea
+                id="whatToChange"
+                name="whatToChange"
+                placeholder="Ej: Más tiempo para el pitch, mejor señal de Wi-Fi..."
+                className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="whatToAdd" className="text-white text-lg">
+                ¿Qué te gustaría que se agregara en futuras ediciones?
+              </Label>
+              <Textarea
+                id="whatToAdd"
+                name="whatToAdd"
+                placeholder="Ej: Un taller de diseño, más opciones veganas..."
+                className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-md transition-colors flex items-center justify-center"
+              disabled={isSubmitting || !isOnline || hasSubmitted}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                "Enviar Feedback"
+              )}
+            </Button>
+            {!isOnline && (
+              <p className="text-sm text-red-400 text-center flex items-center justify-center">
+                <WifiOff className="w-4 h-4 mr-1" /> Sin conexión
+              </p>
+            )}
+            {isOnline && !isSubmitting && (
+              <p className="text-sm text-green-400 text-center flex items-center justify-center">
+                <Wifi className="w-4 h-4 mr-1" /> Conectado
+              </p>
+            )}
+          </form>
+        </CardContent>
+      </Card>
     </div>
   )
 }
