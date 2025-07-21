@@ -274,7 +274,8 @@ export default function FormularioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="foodRating" className="text-white text-lg">
-                Califica la comida y bebidas:
+                Califica las comidas y bebidas
+
               </Label>
               <RadioGroup name="foodRating" defaultValue="3" className="flex space-x-4">
                 {[1, 2, 3, 4, 5].map((value) => (
