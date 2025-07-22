@@ -6,7 +6,7 @@ export default function HomePage() {
     <div className="min-h-screen picante-gradient flex items-center justify-center p-4">
       <div className="max-w-4xl mx-auto text-center text-white">
         <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-8 leading-tight">
-          Contanos cómo viviste la <span className="text-orange-400 block mt-2">Picanthón</span>
+          Contanos cómo viviste la <span className="block mt-2 text-[rgba(250,2,2,1)]">Picanthón</span>
         </h1>
 
         <p className="text-lg md:text-xl lg:text-2xl mb-12 max-w-3xl mx-auto leading-relaxed text-gray-200">
@@ -25,7 +25,7 @@ export default function HomePage() {
 
         <div className="mt-16 text-gray-400">
           <p>
-            Una iniciativa de <span className="text-orange-400 font-semibold">Picante</span>
+            🤖 Powered by <span className="font-semibold text-gray-400">Alertly</span>
           </p>
         </div>
       </div>
