@@ -62,7 +62,7 @@ export default function FormularioPage() {
     if (typeof window !== "undefined") {
       const lastSubmissionTime = localStorage.getItem(SUBMISSION_KEY)
       if (lastSubmissionTime) {
-        const timeDiff = Date.now() - Number.parseInt(lastSubmissionTime, 10)
+        const timeDiff = Date.now() - Number.parseInt(lastSubmissionTime, 30)
         // Consider a submission recent if it was within the last 5 minutes (300,000 ms)
         if (timeDiff < SUBMISSION_COOLDOWN_MS) {
           setHasSubmitted(true)
