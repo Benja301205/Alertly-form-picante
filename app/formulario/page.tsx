@@ -108,6 +108,41 @@ export default function FormularioPage() {
     const form = event.currentTarget
     const formData = new FormData(form)
 
+    // Validar que todos los campos requeridos estén completos
+    const requiredFields = [
+      "returnLikelihood",
+      "venueRating",
+      "foodRating",
+      "mentorExperience",
+      "miniGamesRating",
+      "taskAndOutputRating",
+      "pitchDynamicRating",
+      "judgesDecisionRating",
+    ]
+
+    for (const field of requiredFields) {
+      if (!formData.get(field)) {
+        toast({
+          title: "Campos incompletos",
+          description: "Por favor, completa todos los campos antes de enviar.",
+          variant: "destructive",
+        })
+        setIsSubmitting(false)
+        return
+      }
+    }
+
+    // Validar campos de texto
+    if (!formData.get("whatToKeep") || !formData.get("whatToChange") || !formData.get("whatToAdd")) {
+      toast({
+        title: "Campos incompletos",
+        description: "Por favor, completa todas las preguntas de texto.",
+        variant: "destructive",
+      })
+      setIsSubmitting(false)
+      return
+    }
+
     const data: FormData = {
       returnLikelihood: Number.parseInt(formData.get("returnLikelihood") as string),
       venueRating: Number.parseInt(formData.get("venueRating") as string),
@@ -240,9 +275,9 @@ export default function FormularioPage() {
           <form onSubmit={handleSubmit} className="space-y-6" ref={formRef}>
             <div className="space-y-2">
               <Label htmlFor="returnLikelihood" className="text-white text-lg">
-                ¿Qué tan probable es que vuelvas a participar en un evento de Picante Fund?
+                ¿Qué tan probable es que vuelvas a participar en un evento de Picante?
               </Label>
-              <RadioGroup name="returnLikelihood" defaultValue="3" className="flex space-x-4">
+              <RadioGroup name="returnLikelihood" className="flex space-x-4" required>
                 {[1, 2, 3, 4, 5].map((value) => (
                   <div key={value} className="flex items-center space-x-2">
                     <RadioGroupItem value={String(value)} id={`returnLikelihood-${value}`} />
@@ -257,9 +292,9 @@ export default function FormularioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="venueRating" className="text-white text-lg">
-                Califica el lugar del evento:
+                Del 1 al 5 que te parecio el lugar
               </Label>
-              <RadioGroup name="venueRating" defaultValue="3" className="flex space-x-4">
+              <RadioGroup name="venueRating" className="flex space-x-4" required>
                 {[1, 2, 3, 4, 5].map((value) => (
                   <div key={value} className="flex items-center space-x-2">
                     <RadioGroupItem value={String(value)} id={`venueRating-${value}`} />
@@ -274,10 +309,9 @@ export default function FormularioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="foodRating" className="text-white text-lg">
-                Califica las comidas y bebidas
-
+                Del 1 al 5 que te parecio la comida
               </Label>
-              <RadioGroup name="foodRating" defaultValue="3" className="flex space-x-4">
+              <RadioGroup name="foodRating" className="flex space-x-4" required>
                 {[1, 2, 3, 4, 5].map((value) => (
                   <div key={value} className="flex items-center space-x-2">
                     <RadioGroupItem value={String(value)} id={`foodRating-${value}`} />
@@ -292,9 +326,9 @@ export default function FormularioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="mentorExperience" className="text-white text-lg">
-                Califica la experiencia con los mentores:
+                Del 1 al 5 como fue la experiencia de tu grupo con los mentores
               </Label>
-              <RadioGroup name="mentorExperience" defaultValue="3" className="flex space-x-4">
+              <RadioGroup name="mentorExperience" className="flex space-x-4" required>
                 {[1, 2, 3, 4, 5].map((value) => (
                   <div key={value} className="flex items-center space-x-2">
                     <RadioGroupItem value={String(value)} id={`mentorExperience-${value}`} />
@@ -309,9 +343,9 @@ export default function FormularioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="miniGamesRating" className="text-white text-lg">
-                Califica los mini-games/actividades:
+                Del 1 al 5 que te parecieron los mini games
               </Label>
-              <RadioGroup name="miniGamesRating" defaultValue="3" className="flex space-x-4">
+              <RadioGroup name="miniGamesRating" className="flex space-x-4" required>
                 {[1, 2, 3, 4, 5].map((value) => (
                   <div key={value} className="flex items-center space-x-2">
                     <RadioGroupItem value={String(value)} id={`miniGamesRating-${value}`} />
@@ -326,9 +360,9 @@ export default function FormularioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="taskAndOutputRating" className="text-white text-lg">
-                Califica la consigna y el output esperado:
+                Del 1 al 5 que te parecio la consigna y el output esperado
               </Label>
-              <RadioGroup name="taskAndOutputRating" defaultValue="3" className="flex space-x-4">
+              <RadioGroup name="taskAndOutputRating" className="flex space-x-4" required>
                 {[1, 2, 3, 4, 5].map((value) => (
                   <div key={value} className="flex items-center space-x-2">
                     <RadioGroupItem value={String(value)} id={`taskAndOutputRating-${value}`} />
@@ -343,9 +377,9 @@ export default function FormularioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="pitchDynamicRating" className="text-white text-lg">
-                Califica la dinámica de pitch:
+                Del 1 al 5 qué te pareció la dinámica del pitch  ¿Pudieron transmitir lo que habían creado?
               </Label>
-              <RadioGroup name="pitchDynamicRating" defaultValue="3" className="flex space-x-4">
+              <RadioGroup name="pitchDynamicRating" className="flex space-x-4" required>
                 {[1, 2, 3, 4, 5].map((value) => (
                   <div key={value} className="flex items-center space-x-2">
                     <RadioGroupItem value={String(value)} id={`pitchDynamicRating-${value}`} />
@@ -360,9 +394,9 @@ export default function FormularioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="judgesDecisionRating" className="text-white text-lg">
-                Califica la decisión de los jueces:
+                Del 1 al 5 qué te pareció la decisión final de los jueces
               </Label>
-              <RadioGroup name="judgesDecisionRating" defaultValue="3" className="flex space-x-4">
+              <RadioGroup name="judgesDecisionRating" className="flex space-x-4" required>
                 {[1, 2, 3, 4, 5].map((value) => (
                   <div key={value} className="flex items-center space-x-2">
                     <RadioGroupItem value={String(value)} id={`judgesDecisionRating-${value}`} />
@@ -377,37 +411,40 @@ export default function FormularioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="whatToKeep" className="text-white text-lg">
-                ¿Qué mantendrías para futuros eventos?
+                Que mantendrias de la hackathon, que fue lo que mas te gusto
               </Label>
               <Textarea
                 id="whatToKeep"
                 name="whatToKeep"
                 placeholder="Ej: La energía de los mentores, la variedad de la comida..."
                 className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400"
+                required
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="whatToChange" className="text-white text-lg">
-                ¿Qué cambiarías o mejorarías?
+                Que cambiarias de la hackathon, que fue lo que menos te gusto
               </Label>
               <Textarea
                 id="whatToChange"
                 name="whatToChange"
                 placeholder="Ej: Más tiempo para el pitch, mejor señal de Wi-Fi..."
                 className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400"
+                required
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="whatToAdd" className="text-white text-lg">
-                ¿Qué te gustaría que se agregara en futuras ediciones?
+                Que agregarias a la picanthon
               </Label>
               <Textarea
                 id="whatToAdd"
                 name="whatToAdd"
                 placeholder="Ej: Un taller de diseño, más opciones veganas..."
                 className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400"
+                required
               />
             </div>
 

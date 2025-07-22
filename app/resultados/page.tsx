@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import Link from "next/link"
 import { ArrowLeft, Loader2, AlertCircle, Heart, MessageSquare, BarChart3 } from "lucide-react"
 
@@ -196,7 +195,7 @@ export default function ResultadosPage() {
               </CardContent>
             </Card>
 
-            {/* Sección de Gráfico de Barras */}
+            {/* Sección de Gráfico de Barras con CSS */}
             <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl mb-8">
               <CardHeader>
                 <CardTitle className="text-white flex items-center">
@@ -205,28 +204,43 @@ export default function ResultadosPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={ratingData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#4B5563" />
-                      <XAxis dataKey="name" stroke="#E5E7EB" />
-                      <YAxis domain={[0, 5]} stroke="#E5E7EB" />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: "#1F2937", border: "none", borderRadius: "8px" }}
-                        labelStyle={{ color: "#E5E7EB" }}
-                        itemStyle={{ color: "#FBBF24" }}
-                      />
-                      <Bar dataKey="value" fill="#FBBF24" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div className="space-y-4">
+                  {ratingData.map((item, index) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-200 font-medium">{item.name}</span>
+                        <span className="text-orange-400 font-bold">{item.value.toFixed(1)}/5</span>
+                      </div>
+                      <div className="w-full bg-gray-700 rounded-full h-3">
+                        <div
+                          className="bg-gradient-to-r from-orange-400 to-orange-500 h-3 rounded-full transition-all duration-1000"
+                          style={{ width: `${(item.value / 5) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                {Object.keys(calificaciones).length > 0 && (
-                  <div className="flex justify-between text-xs text-gray-400 mt-4">
-                    <span>1.0 (Muy malo)</span>
-                    <span>3.0 (Regular)</span>
-                    <span>5.0 (Excelente)</span>
-                  </div>
-                )}
+                <div className="flex justify-between text-xs text-gray-400 mt-6">
+                  <span>1.0 (Muy malo)</span>
+                  <span>3.0 (Regular)</span>
+                  <span>5.0 (Excelente)</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tarjeta adicional: Total de respuestas */}
+            <Card className="bg-black/30 border-gray-600 backdrop-blur-sm shadow-xl">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center">
+                  <BarChart3 className="w-5 h-5 mr-2 text-purple-400" />
+                  Estadísticas Generales
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center">
+                  <div className="text-4xl font-bold text-purple-400 mb-2">{totalRespuestas}</div>
+                  <p className="text-gray-200">Total de respuestas recibidas</p>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -234,7 +248,7 @@ export default function ResultadosPage() {
 
         <div className="mt-8 text-center text-gray-400">
           <p>
-            Una iniciativa de <span className="text-orange-400 font-semibold">Picante Fund</span>
+            Una iniciativa de <span className="text-orange-400 font-semibold">Picante</span>
           </p>
         </div>
       </div>

@@ -25,7 +25,7 @@ export default function HomePage() {
 
         <div className="mt-16 text-gray-400">
           <p>
-            Una iniciativa de <span className="text-orange-400 font-semibold">Picante Fund</span>
+            Una iniciativa de <span className="text-orange-400 font-semibold">Picante</span>
           </p>
         </div>
       </div>
