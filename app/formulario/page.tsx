@@ -181,7 +181,7 @@ export default function FormularioPage() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => {
         controller.abort()
-        console.warn(`[${data.submissionId}] Solicitud abortada por timeout (30s).`)
+        console.warn(`[${data.submissionId}] Solicitud abortada por timeout (5s).`)
       }, 30000) // Increased timeout to 30 seconds for AI processing
 
       console.log(`[${data.submissionId}] Enviando datos al webhook: ${WEBHOOK_URL}`)
