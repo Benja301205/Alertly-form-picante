@@ -360,7 +360,7 @@ export default function FormularioPage() {
           <form onSubmit={handleSubmit} className="space-y-6" ref={formRef}>
             <div className="space-y-2">
               <Label htmlFor="returnLikelihood" className="text-white text-lg">
-                ¿Qué tan probable es que vuelvas a participar en un evento de Picante?
+                Del 1 al 5¿Qué tan probable es que vuelvas a participar en un evento de Picante?
               </Label>
               <RadioGroup name="returnLikelihood" className="flex space-x-4" required>
                 {[1, 2, 3, 4, 5].map((value) => (
