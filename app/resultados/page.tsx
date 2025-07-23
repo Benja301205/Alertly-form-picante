@@ -248,7 +248,7 @@ export default function ResultadosPage() {
 
         <div className="mt-8 text-center text-gray-400">
           <p>
-            Powered by  <span className="text-orange-400 font-semibold">PicanteAlertly
+            Powered by  <span className="text-orange-400 font-semibold">Alertly
           </p>
         </div>
       </div>
