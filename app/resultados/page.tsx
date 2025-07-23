@@ -1,5 +1,4 @@
 "use client"
-
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
@@ -248,7 +247,7 @@ export default function ResultadosPage() {
 
         <div className="mt-8 text-center text-gray-400">
           <p>
-            Powered by  <span className="text-orange-400 font-semibold">Alertly
+            Powered by <span className="text-orange-400 font-semibold">Alertly</span>
           </p>
         </div>
       </div>
