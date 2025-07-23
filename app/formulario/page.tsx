@@ -281,19 +281,19 @@ export default function FormularioPage() {
     }
 
     // Verificar conectividad antes de intentar
-    const online = await checkConnectivity()
-    setIsOnline(online)
-    if (!online) {
-      setSubmissionError("No hay conexión a internet. Por favor, revisa tu conexión y vuelve a intentarlo.")
-      setIsSubmitting(false)
-      toast({
-        title: "Error de conexión",
-        description: "No se pudo enviar la encuesta. Revisa tu conexión a internet.",
-        variant: "destructive",
-      })
-      console.error(`[${data.submissionId}] Error: Sin conexión a internet.`)
-      return
-    }
+    //const online = await checkConnectivity()
+    //setIsOnline(online)
+    //if (!online) {
+      //setSubmissionError("No hay conexión a internet. Por favor, revisa tu conexión y vuelve a intentarlo.")
+     // setIsSubmitting(false)
+     // toast({
+       // title: "Error de conexión",
+       // description: "No se pudo enviar la encuesta. Revisa tu conexión a internet.",
+      //  variant: "destructive",
+     // })
+     // console.error(`[${data.submissionId}] Error: Sin conexión a internet.`)
+    //  return
+  //  }
 
     try {
       // 🎯 EJECUTAR CON REINTENTOS AUTOMÁTICOS SILENCIOSOS
