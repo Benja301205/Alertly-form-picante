@@ -248,7 +248,7 @@ export default function ResultadosPage() {
 
         <div className="mt-8 text-center text-gray-400">
           <p>
-            Una iniciativa de <span className="text-orange-400 font-semibold">Picante</span>
+            Powered by  <span className="text-orange-400 font-semibold">PicanteAlertly
           </p>
         </div>
       </div>
