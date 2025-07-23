@@ -2,15 +2,27 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Wifi, WifiOff, CheckCircle, AlertCircle } from "lucide-react"
+import { Loader2, Wifi, WifiOff, CheckCircle, AlertCircle, MessageSquare } from "lucide-react"
 import { v4 as uuidv4 } from "uuid"
+
+// Add these helper functions before the component
+const isWhatsAppBrowser = () => {
+  if (typeof window === "undefined") return false
+  return (
+    navigator.userAgent.toLowerCase().includes("whatsapp") || navigator.userAgent.toLowerCase().includes("wamobile")
+  )
+}
+
+const generateSessionId = () => {
+  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+}
 
 // Define the structure for the form data
 interface FormData {
@@ -26,6 +38,10 @@ interface FormData {
   whatToChange: string
   whatToAdd: string
   submissionId: string // Add submissionId to the form data
+  sessionId: string
+  isWhatsApp: boolean
+  userAgent: string
+  timestamp: string
 }
 
 const SUBMISSION_KEY = "lastSubmissionTime"
@@ -34,11 +50,29 @@ const SUBMISSION_COOLDOWN_MS = 300000 // 5 minutes cooldown
 export default function FormularioPage() {
   const { toast } = useToast()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
   const [submissionError, setSubmissionError] = useState<string | null>(null)
-  const [hasSubmitted, setHasSubmitted] = useState(false) // New state to track if form has been submitted
+  const [hasSubmitted, setHasSubmitted] = useState(false)
+  const [isWhatsApp, setIsWhatsApp] = useState(false)
+  const [sessionId] = useState(() => generateSessionId())
   const formRef = useRef<HTMLFormElement>(null)
+
+  // Check for WhatsApp browser and fresh parameter
+  useEffect(() => {
+    const whatsappDetected = isWhatsAppBrowser()
+    const freshParam = searchParams?.get("fresh") === "true"
+
+    setIsWhatsApp(whatsappDetected)
+
+    if (whatsappDetected || freshParam) {
+      // Clear localStorage for WhatsApp users or fresh requests
+      localStorage.removeItem(SUBMISSION_KEY)
+      setHasSubmitted(false)
+      console.log("WhatsApp browser or fresh request detected - clearing cache")
+    }
+  }, [searchParams])
 
   // Check network status
   useEffect(() => {
@@ -59,23 +93,22 @@ export default function FormularioPage() {
 
   // Check for recent submission in localStorage on mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && !isWhatsApp && searchParams?.get("fresh") !== "true") {
       const lastSubmissionTime = localStorage.getItem(SUBMISSION_KEY)
       if (lastSubmissionTime) {
-        const timeDiff = Date.now() - Number.parseInt(lastSubmissionTime, 30)
-        // Consider a submission recent if it was within the last 5 minutes (300,000 ms)
+        const timeDiff = Date.now() - Number.parseInt(lastSubmissionTime, 10)
         if (timeDiff < SUBMISSION_COOLDOWN_MS) {
           setHasSubmitted(true)
           toast({
             title: "Encuesta ya enviada",
             description:
-              "Parece que ya enviaste una encuesta recientemente. Si crees que es un error, puedes intentarlo de nuevo.",
-            variant: "warning",
+              "Parece que ya enviaste una encuesta recientemente. Puedes enviar una nueva respuesta si lo necesitas.",
+            variant: "default",
           })
         }
       }
     }
-  }, [toast])
+  }, [toast, isWhatsApp, searchParams])
 
   const checkConnectivity = async () => {
     try {
@@ -88,6 +121,18 @@ export default function FormularioPage() {
       console.error("Connectivity check failed:", error)
       return false
     }
+  }
+
+  const allowNewSubmission = () => {
+    localStorage.removeItem(SUBMISSION_KEY)
+    setHasSubmitted(false)
+    setSubmissionError(null)
+    formRef.current?.reset()
+    toast({
+      title: "Formulario reiniciado",
+      description: "Ahora puedes enviar una nueva respuesta.",
+      variant: "default",
+    })
   }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -108,35 +153,53 @@ export default function FormularioPage() {
     const form = event.currentTarget
     const formData = new FormData(form)
 
-    // Validar que todos los campos requeridos estén completos
+    // Replace the validation section in handleSubmit with:
     const requiredFields = [
-      "returnLikelihood",
-      "venueRating",
-      "foodRating",
-      "mentorExperience",
-      "miniGamesRating",
-      "taskAndOutputRating",
-      "pitchDynamicRating",
-      "judgesDecisionRating",
+      { name: "returnLikelihood", label: "Probabilidad de volver" },
+      { name: "venueRating", label: "Calificación del lugar" },
+      { name: "foodRating", label: "Calificación de la comida" },
+      { name: "mentorExperience", label: "Experiencia con mentores" },
+      { name: "miniGamesRating", label: "Calificación de mini games" },
+      { name: "taskAndOutputRating", label: "Calificación de consigna/output" },
+      { name: "pitchDynamicRating", label: "Calificación de dinámica de pitch" },
+      { name: "judgesDecisionRating", label: "Calificación de decisión de jueces" },
     ]
 
+    const missingFields = []
     for (const field of requiredFields) {
-      if (!formData.get(field)) {
-        toast({
-          title: "Campos incompletos",
-          description: "Por favor, completa todos los campos antes de enviar.",
-          variant: "destructive",
-        })
-        setIsSubmitting(false)
-        return
+      if (!formData.get(field.name)) {
+        missingFields.push(field.label)
       }
     }
 
-    // Validar campos de texto
-    if (!formData.get("whatToKeep") || !formData.get("whatToChange") || !formData.get("whatToAdd")) {
+    if (missingFields.length > 0) {
       toast({
         title: "Campos incompletos",
-        description: "Por favor, completa todas las preguntas de texto.",
+        description: `Por favor, completa: ${missingFields.join(", ")}`,
+        variant: "destructive",
+      })
+      setIsSubmitting(false)
+      return
+    }
+
+    // Validar campos de texto
+    const textFields = [
+      { name: "whatToKeep", label: "Qué mantener" },
+      { name: "whatToChange", label: "Qué cambiar" },
+      { name: "whatToAdd", label: "Qué agregar" },
+    ]
+
+    const missingTextFields = []
+    for (const field of textFields) {
+      if (!formData.get(field.name)) {
+        missingTextFields.push(field.label)
+      }
+    }
+
+    if (missingTextFields.length > 0) {
+      toast({
+        title: "Campos de texto incompletos",
+        description: `Por favor, completa: ${missingTextFields.join(", ")}`,
         variant: "destructive",
       })
       setIsSubmitting(false)
@@ -155,7 +218,11 @@ export default function FormularioPage() {
       whatToKeep: formData.get("whatToKeep") as string,
       whatToChange: formData.get("whatToChange") as string,
       whatToAdd: formData.get("whatToAdd") as string,
-      submissionId: uuidv4(), // Generate a unique ID for this submission
+      submissionId: uuidv4(),
+      sessionId: sessionId,
+      isWhatsApp: isWhatsApp,
+      userAgent: typeof window !== "undefined" ? navigator.userAgent : "",
+      timestamp: new Date().toISOString(),
     }
 
     console.log(`[${data.submissionId}] Iniciando envío de formulario. Datos:`, data)
@@ -267,9 +334,27 @@ export default function FormularioPage() {
             </div>
           )}
           {hasSubmitted && (
-            <div className="bg-green-900/30 border border-green-600 text-green-400 p-3 rounded-md flex items-center mb-4">
-              <CheckCircle className="w-5 h-5 mr-2" />
-              ¡Gracias! Tu encuesta ya ha sido enviada.
+            <div className="bg-green-900/30 border border-green-600 text-green-400 p-3 rounded-md mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <CheckCircle className="w-5 h-5 mr-2" />
+                  ¡Gracias! Tu encuesta ya ha sido enviada.
+                </div>
+                <Button
+                  onClick={allowNewSubmission}
+                  variant="outline"
+                  size="sm"
+                  className="ml-4 border-green-600 text-green-400 hover:bg-green-900/50 bg-transparent"
+                >
+                  Nueva respuesta
+                </Button>
+              </div>
+            </div>
+          )}
+          {isWhatsApp && (
+            <div className="bg-blue-900/30 border border-blue-600 text-blue-400 p-3 rounded-md flex items-center mb-4">
+              <MessageSquare className="w-5 h-5 mr-2" />
+              Accediendo desde WhatsApp - Cache deshabilitado
             </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-6" ref={formRef}>
@@ -377,7 +462,7 @@ export default function FormularioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="pitchDynamicRating" className="text-white text-lg">
-                Del 1 al 5 qué te pareció la dinámica del pitch  ¿Pudieron transmitir lo que habían creado?
+                Del 1 al 5 qué te pareció la dinámica del pitch ¿Pudieron transmitir lo que habían creado?
               </Label>
               <RadioGroup name="pitchDynamicRating" className="flex space-x-4" required>
                 {[1, 2, 3, 4, 5].map((value) => (
