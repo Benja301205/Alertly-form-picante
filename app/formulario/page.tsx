@@ -136,41 +136,209 @@ export default function FormularioPage() {
   }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  event.preventDefault()
 
-    if (isSubmitting || hasSubmitted) {
-      toast({
-        title: "Envío en curso o ya realizado",
-        description: "Por favor, espera a que termine el envío actual o verifica si ya enviaste la encuesta.",
-        variant: "warning",
-      })
-      return
+  if (isSubmitting || hasSubmitted) {
+    toast({
+      title: "Envío en curso o ya realizado",
+      description: "Por favor, espera a que termine el envío actual o verifica si ya enviaste la encuesta.",
+      variant: "warning",
+    })
+    return
+  }
+
+  setIsSubmitting(true)
+  setSubmissionError(null)
+
+  const form = event.currentTarget
+  const formData = new FormData(form)
+
+  // Mantener toda la validación actual
+  const requiredFields = [
+    { name: "returnLikelihood", label: "Probabilidad de volver" },
+    { name: "venueRating", label: "Calificación del lugar" },
+    { name: "foodRating", label: "Calificación de la comida" },
+    { name: "mentorExperience", label: "Experiencia con mentores" },
+    { name: "miniGamesRating", label: "Calificación de mini games" },
+    { name: "taskAndOutputRating", label: "Calificación de consigna/output" },
+    { name: "pitchDynamicRating", label: "Calificación de dinámica de pitch" },
+    { name: "judgesDecisionRating", label: "Calificación de decisión de jueces" },
+  ]
+
+  const missingFields = []
+  for (const field of requiredFields) {
+    if (!formData.get(field.name)) {
+      missingFields.push(field.label)
     }
+  }
 
-    setIsSubmitting(true)
-    setSubmissionError(null)
+  if (missingFields.length > 0) {
+    toast({
+      title: "Campos incompletos",
+      description: `Por favor, completa: ${missingFields.join(", ")}`,
+      variant: "destructive",
+    })
+    setIsSubmitting(false)
+    return
+  }
 
-    const form = event.currentTarget
-    const formData = new FormData(form)
+  const textFields = [
+    { name: "whatToKeep", label: "Qué mantener" },
+    { name: "whatToChange", label: "Qué cambiar" },
+    { name: "whatToAdd", label: "Qué agregar" },
+  ]
 
-    // Replace the validation section in handleSubmit with:
-    const requiredFields = [
-      { name: "returnLikelihood", label: "Probabilidad de volver" },
-      { name: "venueRating", label: "Calificación del lugar" },
-      { name: "foodRating", label: "Calificación de la comida" },
-      { name: "mentorExperience", label: "Experiencia con mentores" },
-      { name: "miniGamesRating", label: "Calificación de mini games" },
-      { name: "taskAndOutputRating", label: "Calificación de consigna/output" },
-      { name: "pitchDynamicRating", label: "Calificación de dinámica de pitch" },
-      { name: "judgesDecisionRating", label: "Calificación de decisión de jueces" },
-    ]
+  const missingTextFields = []
+  for (const field of textFields) {
+    if (!formData.get(field.name)) {
+      missingTextFields.push(field.label)
+    }
+  }
 
-    const missingFields = []
-    for (const field of requiredFields) {
-      if (!formData.get(field.name)) {
-        missingFields.push(field.label)
+  if (missingTextFields.length > 0) {
+    toast({
+      title: "Campos de texto incompletos",
+      description: `Por favor, completa: ${missingTextFields.join(", ")}`,
+      variant: "destructive",
+    })
+    setIsSubmitting(false)
+    return
+  }
+
+  const data: FormData = {
+    returnLikelihood: Number.parseInt(formData.get("returnLikelihood") as string),
+    venueRating: Number.parseInt(formData.get("venueRating") as string),
+    foodRating: Number.parseInt(formData.get("foodRating") as string),
+    mentorExperience: Number.parseInt(formData.get("mentorExperience") as string),
+    miniGamesRating: Number.parseInt(formData.get("miniGamesRating") as string),
+    taskAndOutputRating: Number.parseInt(formData.get("taskAndOutputRating") as string),
+    pitchDynamicRating: Number.parseInt(formData.get("pitchDynamicRating") as string),
+    judgesDecisionRating: Number.parseInt(formData.get("judgesDecisionRating") as string),
+    whatToKeep: formData.get("whatToKeep") as string,
+    whatToChange: formData.get("whatToChange") as string,
+    whatToAdd: formData.get("whatToAdd") as string,
+    submissionId: uuidv4(),
+    sessionId: sessionId,
+    isWhatsApp: isWhatsApp,
+    userAgent: typeof window !== "undefined" ? navigator.userAgent : "",
+    timestamp: new Date().toISOString(),
+  }
+
+  console.log(`[${data.submissionId}] Iniciando envío de formulario. Datos:`, data)
+
+  // 🚀 NUEVA FUNCIÓN DE RETRY AUTOMÁTICO SILENCIOSO
+  const submitWithRetry = async (maxRetries = 3) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[${data.submissionId}] Intento ${attempt}/${maxRetries}`)
+
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => {
+          controller.abort()
+          console.warn(`[${data.submissionId}] Intento ${attempt} - Timeout después de 10s`)
+        }, 10000) // Reducido a 10 segundos
+
+        const response = await fetch("https://snowmba.app.n8n.cloud/webhook/picanthon-survey", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(data),
+          signal: controller.signal,
+        })
+        
+        clearTimeout(timeoutId)
+
+        console.log(`[${data.submissionId}] Intento ${attempt} - Status: ${response.status}`)
+
+        if (response.ok) {
+          const result = await response.json()
+          console.log(`[${data.submissionId}] ✅ ÉXITO en intento ${attempt}`)
+          return { success: true, result }
+        }
+
+        // Si no es ok pero no es el último intento, continúa silenciosamente
+        if (attempt === maxRetries) {
+          const errorBody = await response.text()
+          throw new Error(`Error del servidor (${response.status}): ${errorBody || response.statusText}`)
+        }
+
+      } catch (error: any) {
+        console.error(`[${data.submissionId}] ❌ Intento ${attempt} falló:`, error.message)
+        
+        // Si es el último intento, lanzar error
+        if (attempt === maxRetries) {
+          throw error
+        }
+        
+        // Esperar silenciosamente antes del siguiente intento
+        const waitTime = Math.min(1000 * attempt, 3000) // 1s, 2s, 3s máximo
+        console.log(`[${data.submissionId}] ⏳ Esperando ${waitTime}ms antes del siguiente intento`)
+        await new Promise(resolve => setTimeout(resolve, waitTime))
       }
     }
+  }
+
+  // Verificar conectividad antes de intentar
+  const online = await checkConnectivity()
+  setIsOnline(online)
+  if (!online) {
+    setSubmissionError("No hay conexión a internet. Por favor, revisa tu conexión y vuelve a intentarlo.")
+    setIsSubmitting(false)
+    toast({
+      title: "Error de conexión",
+      description: "No se pudo enviar la encuesta. Revisa tu conexión a internet.",
+      variant: "destructive",
+    })
+    console.error(`[${data.submissionId}] Error: Sin conexión a internet.`)
+    return
+  }
+
+  try {
+    // 🎯 EJECUTAR CON REINTENTOS AUTOMÁTICOS SILENCIOSOS
+    const { success, result } = await submitWithRetry(3)
+    
+    if (success) {
+      console.log(`[${data.submissionId}] 🎉 Envío completado exitosamente:`, result)
+      
+      if (typeof window !== "undefined") {
+        localStorage.setItem(SUBMISSION_KEY, Date.now().toString())
+      }
+      setHasSubmitted(true)
+      formRef.current?.reset()
+
+      toast({
+        title: "¡Encuesta enviada!",
+        description: "Gracias por tu feedback. Redirigiendo a los resultados...",
+        variant: "success",
+      })
+      router.push("/resultados")
+    }
+
+  } catch (error: any) {
+    console.error(`[${data.submissionId}] 💥 Error final después de todos los reintentos:`, error)
+    
+    let errorMessage = "No se pudo enviar la encuesta después de varios intentos."
+    
+    if (error.name === "AbortError") {
+      errorMessage = "La conexión es muy lenta. Por favor, intenta desde una mejor red."
+    } else if (error.message.includes("Failed to fetch")) {
+      errorMessage = "Sin conexión a internet. Revisa tu red y vuelve a intentar."
+    } else if (error.message.includes("Error del servidor")) {
+      errorMessage = "Error del servidor. El equipo técnico ha sido notificado."
+    }
+
+    setSubmissionError(errorMessage)
+    toast({
+      title: "Error de envío",
+      description: errorMessage,
+      variant: "destructive",
+    })
+  } finally {
+    setIsSubmitting(false)
+  }
+}
 
     if (missingFields.length > 0) {
       toast({
