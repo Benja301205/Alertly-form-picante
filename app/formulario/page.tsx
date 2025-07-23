@@ -235,8 +235,8 @@ export default function FormularioPage() {
           const controller = new AbortController()
           const timeoutId = setTimeout(() => {
             controller.abort()
-            console.warn(`[${data.submissionId}] Intento ${attempt} - Timeout después de 10s`)
-          }, 10000) // Reducido a 10 segundos
+            console.warn(`[${data.submissionId}] Intento ${attempt} - Timeout después de 30s`)
+          }, 30000) // Reducido a 10 segundos
 
           const response = await fetch("https://snowmba.app.n8n.cloud/webhook/picanthon-survey", {
             method: "POST",
